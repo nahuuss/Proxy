@@ -1,0 +1,2 @@
+{"id":"test-port","name":"test port","description":"test de puerto","targetUrl":"https://core.serenaart.com.ar/","publicHost":"core2.nathium.com.ar","port":8081,"isActive":true,"_id":"38UWWYA5c2F789db"}
+{"id":"core-serena","name":"Core Serena","description":"Proxy principal de producción para Serena Art","port":8080,"targetUrl":"https://coretest.serenaart.com.ar/","publicHost":"core.nathium.com.ar","isActive":true,"_id":"Pu8gfPGY52n1HTzs"}

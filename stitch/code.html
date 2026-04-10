@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Proxy Platform Engine v1.2</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-fixed-dim": "#89ceff",
+              "secondary-container": "#00a572",
+              "error-container": "#93000a",
+              "error": "#ffb4ab",
+              "on-secondary-fixed-variant": "#005236",
+              "surface-container": "#171f33",
+              "on-tertiary-fixed-variant": "#004c6e",
+              "on-tertiary": "#00344d",
+              "tertiary-container": "#009ada",
+              "tertiary": "#89ceff",
+              "surface-container-high": "#222a3d",
+              "surface": "#0b1326",
+              "primary-fixed-dim": "#b3c5ff",
+              "on-primary": "#002b75",
+              "on-secondary": "#003824",
+              "inverse-primary": "#0055d5",
+              "outline-variant": "#424655",
+              "tertiary-fixed": "#c9e6ff",
+              "on-tertiary-container": "#002d43",
+              "surface-dim": "#0b1326",
+              "on-secondary-container": "#00311f",
+              "background": "#0b1326",
+              "primary-fixed": "#dae1ff",
+              "surface-container-low": "#131b2e",
+              "on-tertiary-fixed": "#001e2f",
+              "surface-container-lowest": "#060e20",
+              "on-primary-container": "#002567",
+              "on-error": "#690005",
+              "on-surface-variant": "#c2c6d8",
+              "on-surface": "#dae2fd",
+              "on-primary-fixed": "#001849",
+              "on-error-container": "#ffdad6",
+              "primary-container": "#5e8bff",
+              "on-primary-fixed-variant": "#003fa4",
+              "surface-container-highest": "#2d3449",
+              "secondary-fixed": "#6ffbbe",
+              "primary": "#b3c5ff",
+              "on-secondary-fixed": "#002113",
+              "secondary-fixed-dim": "#4edea3",
+              "secondary": "#4edea3",
+              "inverse-surface": "#dae2fd",
+              "surface-bright": "#31394d",
+              "outline": "#8c90a1"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #0b1326;
+            color: #dae2fd;
+            font-family: 'Inter', sans-serif;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(45, 52, 73, 0.6);
+            backdrop-filter: blur(12px);
+        }
+    </style>
+</head>
+<body class="flex min-h-screen">
+<!-- SideNavBar (The Anchor) -->
+<aside class="fixed left-0 top-0 h-full flex flex-col py-8 border-r border-[#424655]/15 bg-[#0b1326] w-64 z-50">
+<div class="px-6 mb-10">
+<div class="flex items-center gap-3 mb-6">
+<div class="w-8 h-8 rounded-lg bg-gradient-to-br from-[#b3c5ff] to-[#5e8bff] flex items-center justify-center">
+<span class="material-symbols-outlined text-[#002b75] text-sm" style="font-variation-settings: 'FILL' 1;">terminal</span>
+</div>
+<div>
+<h2 class="font-headline text-sm font-bold tracking-tight text-[#dae2fd]">Engine v1.2</h2>
+<p class="font-body text-[10px] text-[#c2c6d8] uppercase tracking-widest">Active Nodes: 14</p>
+</div>
+</div>
+<button class="w-full bg-gradient-to-r from-[#b3c5ff] to-[#5e8bff] text-[#002b75] font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-xs uppercase tracking-widest transition-transform active:scale-95">
+<span class="material-symbols-outlined text-sm">add</span>
+                Deploy New Connector
+            </button>
+</div>
+<nav class="flex-1 px-4 space-y-1">
+<a class="flex items-center gap-4 px-4 py-3 text-[#2970FF] bg-[#2d3449]/50 border-r-4 border-[#2970FF] group transition-all duration-300" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-label text-xs font-medium uppercase tracking-widest">Dashboard</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-[#c2c6d8] hover:bg-[#131b2e] hover:text-[#dae2fd] group transition-all duration-300" href="#">
+<span class="material-symbols-outlined">hub</span>
+<span class="font-label text-xs font-medium uppercase tracking-widest">Connectors</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-[#c2c6d8] hover:bg-[#131b2e] hover:text-[#dae2fd] group transition-all duration-300" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label text-xs font-medium uppercase tracking-widest">Traffic Logs</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-[#c2c6d8] hover:bg-[#131b2e] hover:text-[#dae2fd] group transition-all duration-300" href="#">
+<span class="material-symbols-outlined">shield</span>
+<span class="font-label text-xs font-medium uppercase tracking-widest">Security</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-[#c2c6d8] hover:bg-[#131b2e] hover:text-[#dae2fd] group transition-all duration-300" href="#">
+<span class="material-symbols-outlined">tune</span>
+<span class="font-label text-xs font-medium uppercase tracking-widest">Settings</span>
+</a>
+</nav>
+<div class="px-4 pt-8 border-t border-[#424655]/15 space-y-1">
+<a class="flex items-center gap-4 px-4 py-3 text-[#c2c6d8] hover:text-[#dae2fd] transition-all duration-300" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-label text-xs font-medium uppercase tracking-widest">Help</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-[#c2c6d8] hover:text-[#dae2fd] transition-all duration-300" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-label text-xs font-medium uppercase tracking-widest">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-64 flex-1 flex flex-col">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center w-full px-8 h-16 sticky top-0 z-40 bg-[#0b1326]">
+<div class="flex items-center gap-4">
+<h1 class="font-headline text-xl font-bold tracking-tighter text-[#dae2fd]">Proxy Platform Engine</h1>
+<div class="flex items-center gap-2 px-2.5 py-1 rounded-full bg-[#00a572]/10 border border-[#00a572]/20">
+<div class="w-2 h-2 rounded-full bg-[#4edea3] shadow-[0_0_8px_#4edea3]"></div>
+<span class="font-label text-[10px] font-bold text-[#4edea3] tracking-widest uppercase">ONLINE</span>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4">
+<button class="p-2 text-[#c2c6d8] hover:text-[#dae2fd] hover:bg-[#2d3449] rounded-lg transition-colors active:scale-95">
+<span class="material-symbols-outlined text-xl">account_tree</span>
+</button>
+<button class="p-2 text-[#c2c6d8] hover:text-[#dae2fd] hover:bg-[#2d3449] rounded-lg transition-colors active:scale-95 relative">
+<span class="material-symbols-outlined text-xl">notifications</span>
+<span class="absolute top-2 right-2 w-1.5 h-1.5 bg-[#2970FF] rounded-full"></span>
+</button>
+<button class="p-2 text-[#c2c6d8] hover:text-[#dae2fd] hover:bg-[#2d3449] rounded-lg transition-colors active:scale-95">
+<span class="material-symbols-outlined text-xl">settings</span>
+</button>
+</div>
+<div class="h-8 w-[1px] bg-[#424655]/20"></div>
+<div class="flex items-center gap-3 pl-2">
+<div class="text-right">
+<p class="text-xs font-bold text-[#dae2fd] leading-none">Admin. Root</p>
+<p class="text-[10px] text-[#c2c6d8]">Session: 2h 14m</p>
+</div>
+<img alt="User profile" class="w-8 h-8 rounded-full border border-[#424655]/30" data-alt="Close up of a professional male avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuASx5Ks0yYVXEw0GC1qMCm2Ey89hW_YDnyXFaiVydovT_aGFi4zs5Yb5IZFFtPcXAz6i_IVvk8E9EJIRvBZt0IiqpAdt5EFcOLCltf00faHyqhtlf8vOaPgXEe2fxsk1OeTLXQYXBASR-9jhTFgOHaAINV7Mn5rU2tkAoZ4DOQBMOGt9YHqD4hUvZKJZVN7Hnnb5pMJCHgAdxinWA8NwUNiyDE5_uOdqRxmfU-hwH1WSklkIMgyEYw_O-uY0L8tP5IBHQ9NP8oEQ5gb"/>
+</div>
+</div>
+</header>
+<!-- Canvas Body -->
+<div class="p-10 space-y-10">
+<!-- Registration Form Section (Streamlined) -->
+<section class="bg-[#131b2e] rounded-xl overflow-hidden">
+<div class="px-8 py-6 border-b border-[#424655]/10 flex justify-between items-center">
+<div>
+<h2 class="font-headline text-lg font-bold text-[#dae2fd] tracking-tight">Dar de Alta Nuevo Conector</h2>
+<p class="font-body text-xs text-[#c2c6d8]">Provision new node infrastructure in seconds</p>
+</div>
+<span class="material-symbols-outlined text-[#2970FF]/50">rocket_launch</span>
+</div>
+<div class="p-8 grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+<div class="space-y-2">
+<label class="font-label text-[10px] font-medium uppercase tracking-widest text-[#c2c6d8]">Connector Name</label>
+<input class="w-full bg-[#060e20] border-none text-[#dae2fd] text-sm py-3 px-4 rounded-lg focus:ring-1 focus:ring-[#2970FF]/30 placeholder-[#424655]" placeholder="e.g. Edge Node Primary" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="font-label text-[10px] font-medium uppercase tracking-widest text-[#c2c6d8]">Target Port</label>
+<input class="w-full bg-[#060e20] border-none text-[#dae2fd] font-mono text-sm py-3 px-4 rounded-lg focus:ring-1 focus:ring-[#2970FF]/30 placeholder-[#424655]" placeholder="e.g. 8080" type="text"/>
+</div>
+<div class="space-y-2">
+<label class="font-label text-[10px] font-medium uppercase tracking-widest text-[#c2c6d8]">Traffic Policy</label>
+<select class="w-full bg-[#060e20] border-none text-[#dae2fd] text-sm py-3 px-4 rounded-lg focus:ring-1 focus:ring-[#2970FF]/30">
+<option>Standard Balanced</option>
+<option>High Priority / Low Latency</option>
+<option>Security Focused / Tunnel</option>
+</select>
+</div>
+<button class="bg-gradient-to-r from-[#b3c5ff] to-[#5e8bff] text-[#002b75] font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 text-xs uppercase tracking-widest transition-transform active:scale-95 shadow-lg shadow-[#002b75]/20">
+<span class="material-symbols-outlined text-sm">bolt</span>
+                        Provision Node
+                    </button>
+</div>
+</section>
+<!-- Active Connectors Grid/List -->
+<section class="space-y-6">
+<div class="flex justify-between items-end">
+<div>
+<h2 class="font-headline text-lg font-bold text-[#dae2fd] tracking-tight">Active Infrastructure Connectors</h2>
+<p class="font-body text-xs text-[#c2c6d8]">Real-time performance monitoring and node health</p>
+</div>
+<div class="flex gap-2">
+<button class="p-2 bg-[#2d3449] rounded-lg text-[#dae2fd]"><span class="material-symbols-outlined text-sm">view_list</span></button>
+<button class="p-2 text-[#c2c6d8] hover:bg-[#2d3449] rounded-lg transition-colors"><span class="material-symbols-outlined text-sm">grid_view</span></button>
+</div>
+</div>
+<!-- Connectors List -->
+<div class="space-y-3">
+<!-- Connector Item 1 -->
+<div class="group bg-[#131b2e] hover:bg-[#171f33] transition-colors p-5 rounded-xl flex items-center gap-8 border-l-4 border-[#4edea3]">
+<div class="flex items-center gap-4 w-1/4">
+<div class="w-10 h-10 rounded bg-[#2d3449] flex items-center justify-center text-[#4edea3]">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dns</span>
+</div>
+<div>
+<h3 class="font-headline text-sm font-bold text-[#dae2fd]">Core Serena</h3>
+<p class="font-body text-[10px] text-[#c2c6d8] font-mono">ID: NODE-8842-X</p>
+</div>
+</div>
+<div class="flex-1 grid grid-cols-4 gap-8">
+<div class="space-y-1">
+<p class="font-label text-[10px] font-medium uppercase tracking-widest text-[#c2c6d8]">Latency</p>
+<div class="flex items-baseline gap-1">
+<span class="font-headline text-lg font-bold text-[#89ceff]">24</span>
+<span class="text-[10px] text-[#89ceff]/70">ms</span>
+</div>
+</div>
+<div class="space-y-1">
+<p class="font-label text-[10px] font-medium uppercase tracking-widest text-[#c2c6d8]">Requests</p>
+<div class="flex items-baseline gap-1">
+<span class="font-headline text-lg font-bold text-[#dae2fd]">1.4k</span>
+<span class="text-[10px] text-[#c2c6d8]">/min</span>
+</div>
+</div>
+<div class="space-y-1">
+<p class="font-label text-[10px] font-medium uppercase tracking-widest text-[#c2c6d8]">Traffic</p>
+<div class="flex items-baseline gap-1">
+<span class="font-headline text-lg font-bold text-[#dae2fd]">28.4</span>
+<span class="text-[10px] text-[#c2c6d8]">GB</span>
+</div>
+</div>
+<div class="space-y-1">
+<p class="font-label text-[10px] font-medium uppercase tracking-widest text-[#c2c6d8]">Status</p>
+<div class="flex items-center gap-2 pt-1">
+<span class="w-1.5 h-1.5 rounded-full bg-[#4edea3]"></span>
+<span class="text-[10px] font-bold text-[#4edea3] uppercase tracking-tighter">Healthy</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 text-[#c2c6d8] hover:text-[#2970FF] hover:bg-[#2d3449] rounded-lg transition-all active:scale-90">
+<span class="material-symbols-outlined text-sm">monitoring</span>
+</button>
+<button class="p-2 text-[#c2c6d8] hover:text-[#ffb4ab] hover:bg-[#2d3449] rounded-lg transition-all active:scale-90">
+<span class="material-symbols-outlined text-sm">pause</span>
+</button>
+<button class="p-2 text-[#c2c6d8] hover:text-[#dae2fd] hover:bg-[#2d3449] rounded-lg transition-all active:scale-90">
+<span class="material-symbols-outlined text-sm">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Connector Item 2 -->
+<div class="group bg-[#131b2e] hover:bg-[#171f33] transition-colors p-5 rounded-xl flex items-center gap-8 border-l-4 border-[#89ceff]">
+<div class="flex items-center gap-4 w-1/4">
+<div class="w-10 h-10 rounded bg-[#2d3449] flex items-center justify-center text-[#89ceff]">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">router</span>
+</div>
+<div>
+<h3 class="font-headline text-sm font-bold text-[#dae2fd]">test port</h3>
+<p class="font-body text-[10px] text-[#c2c6d8] font-mono">ID: NODE-1102-K</p>
+</div>
+</div>
+<div class="flex-1 grid grid-cols-4 gap-8">
+<div class="space-y-1">
+<p class="font-label text-[10px] font-medium uppercase tracking-widest text-[#c2c6d8]">Latency</p>
+<div class="flex items-baseline gap-1">
+<span class="font-headline text-lg font-bold text-[#89ceff]">118</span>
+<span class="text-[10px] text-[#89ceff]/70">ms</span>
+</div>
+</div>
+<div class="space-y-1">
+<p class="font-label text-[10px] font-medium uppercase tracking-widest text-[#c2c6d8]">Requests</p>
+<div class="flex items-baseline gap-1">
+<span class="font-headline text-lg font-bold text-[#dae2fd]">42</span>
+<span class="text-[10px] text-[#c2c6d8]">/min</span>
+</div>
+</div>
+<div class="space-y-1">
+<p class="font-label text-[10px] font-medium uppercase tracking-widest text-[#c2c6d8]">Traffic</p>
+<div class="flex items-baseline gap-1">
+<span class="font-headline text-lg font-bold text-[#dae2fd]">0.2</span>
+<span class="text-[10px] text-[#c2c6d8]">GB</span>
+</div>
+</div>
+<div class="space-y-1">
+<p class="font-label text-[10px] font-medium uppercase tracking-widest text-[#c2c6d8]">Status</p>
+<div class="flex items-center gap-2 pt-1">
+<span class="w-1.5 h-1.5 rounded-full bg-[#89ceff]"></span>
+<span class="text-[10px] font-bold text-[#89ceff] uppercase tracking-tighter">Testing</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 text-[#c2c6d8] hover:text-[#2970FF] hover:bg-[#2d3449] rounded-lg transition-all active:scale-90">
+<span class="material-symbols-outlined text-sm">monitoring</span>
+</button>
+<button class="p-2 text-[#c2c6d8] hover:text-[#ffb4ab] hover:bg-[#2d3449] rounded-lg transition-all active:scale-90">
+<span class="material-symbols-outlined text-sm">delete</span>
+</button>
+<button class="p-2 text-[#c2c6d8] hover:text-[#dae2fd] hover:bg-[#2d3449] rounded-lg transition-all active:scale-90">
+<span class="material-symbols-outlined text-sm">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Connector Item 3 (Mocked for grid feel) -->
+<div class="group bg-[#131b2e] hover:bg-[#171f33] transition-colors p-5 rounded-xl flex items-center gap-8 border-l-4 border-[#2d3449]">
+<div class="flex items-center gap-4 w-1/4 opacity-60">
+<div class="w-10 h-10 rounded bg-[#2d3449] flex items-center justify-center text-[#c2c6d8]">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">data_thresholding</span>
+</div>
+<div>
+<h3 class="font-headline text-sm font-bold text-[#dae2fd]">Backup Archive</h3>
+<p class="font-body text-[10px] text-[#c2c6d8] font-mono text-xs italic">Paused by user</p>
+</div>
+</div>
+<div class="flex-1 grid grid-cols-4 gap-8 opacity-40">
+<div class="space-y-1">
+<p class="font-label text-[10px] font-medium uppercase tracking-widest text-[#c2c6d8]">Latency</p>
+<span class="font-headline text-lg font-bold text-[#dae2fd]">--</span>
+</div>
+<div class="space-y-1">
+<p class="font-label text-[10px] font-medium uppercase tracking-widest text-[#c2c6d8]">Requests</p>
+<span class="font-headline text-lg font-bold text-[#dae2fd]">0</span>
+</div>
+<div class="space-y-1">
+<p class="font-label text-[10px] font-medium uppercase tracking-widest text-[#c2c6d8]">Traffic</p>
+<span class="font-headline text-lg font-bold text-[#dae2fd]">0.0</span>
+</div>
+<div class="space-y-1">
+<p class="font-label text-[10px] font-medium uppercase tracking-widest text-[#c2c6d8]">Status</p>
+<div class="flex items-center gap-2 pt-1">
+<span class="w-1.5 h-1.5 rounded-full bg-[#424655]"></span>
+<span class="text-[10px] font-bold text-[#c2c6d8] uppercase tracking-tighter">Standby</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 text-[#c2c6d8] hover:text-[#4edea3] hover:bg-[#2d3449] rounded-lg transition-all active:scale-90">
+<span class="material-symbols-outlined text-sm">play_arrow</span>
+</button>
+<button class="p-2 text-[#c2c6d8] hover:text-[#dae2fd] hover:bg-[#2d3449] rounded-lg transition-all active:scale-90">
+<span class="material-symbols-outlined text-sm">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Bottom Dashboard Summary -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="bg-[#131b2e] p-6 rounded-xl space-y-4">
+<div class="flex justify-between items-center">
+<p class="font-label text-[10px] font-bold uppercase tracking-widest text-[#c2c6d8]">Global Throughput</p>
+<span class="material-symbols-outlined text-[#2970FF] text-sm">trending_up</span>
+</div>
+<div class="flex items-baseline gap-2">
+<h4 class="font-headline text-3xl font-bold text-[#dae2fd]">142.8</h4>
+<span class="text-xs text-[#c2c6d8]">Mb/s</span>
+</div>
+<div class="w-full h-1 bg-[#060e20] rounded-full overflow-hidden">
+<div class="h-full bg-[#2970FF] w-3/4"></div>
+</div>
+</div>
+<div class="bg-[#131b2e] p-6 rounded-xl space-y-4">
+<div class="flex justify-between items-center">
+<p class="font-label text-[10px] font-bold uppercase tracking-widest text-[#c2c6d8]">System Load</p>
+<span class="material-symbols-outlined text-[#4edea3] text-sm">memory</span>
+</div>
+<div class="flex items-baseline gap-2">
+<h4 class="font-headline text-3xl font-bold text-[#dae2fd]">32.1</h4>
+<span class="text-xs text-[#c2c6d8]">%</span>
+</div>
+<div class="w-full h-1 bg-[#060e20] rounded-full overflow-hidden">
+<div class="h-full bg-[#4edea3] w-[32%]"></div>
+</div>
+</div>
+<div class="bg-[#131b2e] p-6 rounded-xl space-y-4">
+<div class="flex justify-between items-center">
+<p class="font-label text-[10px] font-bold uppercase tracking-widest text-[#c2c6d8]">Network Latency</p>
+<span class="material-symbols-outlined text-[#89ceff] text-sm">speed</span>
+</div>
+<div class="flex items-baseline gap-2">
+<h4 class="font-headline text-3xl font-bold text-[#dae2fd]">34</h4>
+<span class="text-xs text-[#c2c6d8]">ms avg</span>
+</div>
+<div class="w-full h-1 bg-[#060e20] rounded-full overflow-hidden">
+<div class="h-full bg-[#89ceff] w-1/4"></div>
+</div>
+</div>
+</section>
+</div>
+<!-- System Footer Toast -->
+<footer class="mt-auto px-8 py-4 border-t border-[#424655]/10 flex justify-between items-center bg-[#131b2e]/30 backdrop-blur-sm">
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2">
+<span class="text-[10px] font-bold text-[#c2c6d8] uppercase tracking-widest">Version:</span>
+<span class="text-[10px] font-mono text-[#dae2fd]">v1.2.0-stable</span>
+</div>
+<div class="flex items-center gap-2 text-[#4edea3]">
+<span class="material-symbols-outlined text-[14px]">check_circle</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">All nodes synced</span>
+</div>
+</div>
+<p class="text-[10px] text-[#c2c6d8]/50 italic">Observation Engine • Operational Intelligence Layer</p>
+</footer>
+</main>
+</body></html>

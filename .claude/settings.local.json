@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -ri \"dashimed\" /e/Dashimed/*.code-workspace -n)",
+      "Bash(grep -ri \"dashimed\" /e/Dashimed/src /e/Dashimed/*.json /e/Dashimed/*.js /e/Dashimed/*.md /e/Dashimed/sql /e/Dashimed/context /e/Dashimed/OpenCode /e/Dashimed/.github --exclude-dir=.next -n)",
+      "Bash(grep -ri \"dashimed\" /e/Dashimed/src /e/Dashimed/README.md /e/Dashimed/sql/*.sql /e/Dashimed/.github -n)",
+      "Bash(grep -v \"Dashimed\\\\\\\\OpenCode\")",
+      "Bash(grep -r \"Dashimed\" /e/Dashimed/README.md /e/Dashimed/sql/*.sql /e/Dashimed/sql/*.md -n)",
+      "Bash(ls e:/Dashimed/CLAUDE*.md)",
+      "mcp__sql-server-dash__execute-raw-queries",
+      "mcp__sql-server-dash__get-table-schema",
+      "Bash(cat /e/Dashimed/src/app/\\\\\\(dashboard\\\\\\)/layout.tsx)",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"E:\\\\Proxy\\\\preparar-despliegue.ps1\")",
+      "Bash(grep -l proxy-manager E:/Proxy/BizGuard/.next/server/chunks/*)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); logs=d.get\\(''''logs'''',[]\\); [print\\(l.get\\(''''timestamp'''',''''''''\\),l.get\\(''''type'''',''''''''\\),l.get\\(''''message'''',''''''''\\)\\) for l in logs[-30:]]\")",
+      "Bash(find E:/Proxy/src -path */login* -name *.tsx -o -path */login* -name *.ts)",
+      "Bash(powershell.exe -File \"preparar-despliegue.ps1\")",
+      "Bash(find E:/Proxy/node_modules/@auth -name *.js)",
+      "Bash(xargs grep:*)",
+      "Bash(find E:/Proxy/node_modules -path */core/lib/oauth/callback.js -o -path */core/lib/oauth/authorization-url.js)",
+      "Bash(powershell -File preparar-despliegue.ps1)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(Start-Sleep -Seconds 1)",
+      "Bash(Start-Process -FilePath \"node\" -ArgumentList \"server.js\" -WorkingDirectory \"E:\\\\Proxy\\\\BizGuard\" -WindowStyle Hidden)",
+      "Bash(cmd /c \"taskkill /F /IM node.exe\")",
+      "Bash(cmd /c \"cd E:\\\\Proxy\\\\BizGuard && start /B node server.js > E:\\\\Proxy\\\\BizGuard\\\\server.log 2>&1\")",
+      "Bash(cmd /c \"tasklist /FI \"\"IMAGENAME eq node.exe\"\" 2>&1\")",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File preparar-despliegue.ps1)",
+      "Bash(python3 -c \":*)",
+      "Bash(node -e \":*)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep -l \"scheduled\\\\|cronjob\\\\|CronJob\")",
+      "Bash(grep -l \"esxi_configurations\\\\|esxi_name\\\\|datacenter\" /e/Dashimed/sql/*.sql)",
+      "Bash(grep -l \"IsDisabled\" /e/Dashimed/sql/*.sql)",
+      "Bash(xargs grep -l \"background_tasks_config\")",
+      "Bash(grep -n \"fetch\\(''/api/vmware/inventory\\\\|fetch\\(''/api/aws/inventory\" /e/Dashimed/src/components/Page/Dashboard/*.tsx)",
+      "Bash(find \"e:/Dashimed/src/app/\\(dashboard\\)\" -maxdepth 1 -type d)",
+      "mcp__n8n-builder__n8n_create_workflow",
+      "Bash(python3 -c \":*)",
+      "Bash(node -e \":*)",
+      "mcp__n8n-builder__tools_documentation",
+      "Bash(pm2 list)",
+      "Bash(tasklist /fi \"imagename eq node.exe\" /fo csv)",
+      "Bash(Get-Process -Name node -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object Id, CPU, WorkingSet, CommandLine)",
+      "Bash(findstr \":3000\")",
+      "Bash(grep -r \"ServerName\\\\|hostname\" /e/Dashimed/sql/*.sql)",
+      "Bash(xargs grep -l \"InventorySettingsForm\\\\|Settings.*Inventory\\\\|InventorySettingsModal\")",
+      "Bash(gh repo:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(npx skills:*)",
+      "Bash(node -e ':*)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\nserrano\\.claude\\projects\\e--Dashimed"
+    ]
+  }
+}

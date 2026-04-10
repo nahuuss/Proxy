@@ -1,0 +1,53 @@
+{
+  "node": {
+    "605edc54c680af169993a3ad1e29d83cc37285f6e5": {
+      "workers": {
+        "app/page": {
+          "moduleId": 32989,
+          "async": false,
+          "exportedName": "createConnectorAction",
+          "filename": "src/app/actions.ts"
+        }
+      },
+      "exportedName": "createConnectorAction",
+      "filename": "src/app/actions.ts"
+    },
+    "602bfb40c3e1ac34ffd3d1e18e9fa54546573ac834": {
+      "workers": {
+        "app/page": {
+          "moduleId": 32989,
+          "async": false,
+          "exportedName": "updateConnectorAction",
+          "filename": "src/app/actions.ts"
+        }
+      },
+      "exportedName": "updateConnectorAction",
+      "filename": "src/app/actions.ts"
+    },
+    "4088cf3b69841c8ee42d3f11763ca5f74f118c73aa": {
+      "workers": {
+        "app/page": {
+          "moduleId": 32989,
+          "async": false,
+          "exportedName": "toggleConnectorAction",
+          "filename": "src/app/actions.ts"
+        }
+      },
+      "exportedName": "toggleConnectorAction",
+      "filename": "src/app/actions.ts"
+    },
+    "40cdee3a11c4834914a0eca02b4b3a27736ea18582": {
+      "workers": {
+        "app/page": {
+          "moduleId": 32989,
+          "async": false,
+          "exportedName": "deleteConnectorAction",
+          "filename": "src/app/actions.ts"
+        }
+      },
+      "exportedName": "deleteConnectorAction",
+      "filename": "src/app/actions.ts"
+    }
+  },
+  "edge": {}
+}

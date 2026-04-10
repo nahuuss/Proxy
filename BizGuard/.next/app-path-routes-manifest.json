@@ -1,0 +1,12 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/api/auth/[...nextauth]/route": "/api/auth/[...nextauth]",
+  "/api/logs/stream/route": "/api/logs/stream",
+  "/api/stats/route": "/api/stats",
+  "/api/stats/stream/route": "/api/stats/stream",
+  "/favicon.ico/route": "/favicon.ico",
+  "/login/ntlm/page": "/login/ntlm",
+  "/login/page": "/login",
+  "/page": "/"
+}

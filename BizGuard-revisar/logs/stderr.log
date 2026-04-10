@@ -1,0 +1,13 @@
+[NeDB] Colisión al cargar connectors.db (intento 1/3). Reintentando en 500ms...
+[Auth WARN] debug-enabled
+[NeDB] Colisión al cargar connectors.db (intento 1/3). Reintentando en 500ms...
+[Auth WARN] debug-enabled
+[Auth WARN] debug-enabled
+[Auth ERROR DETAIL] {
+  "name": "m",
+  "type": "InvalidCallbackUrl",
+  "kind": "error"
+}
+[NeDB] Colisión al cargar connectors.db (intento 1/3). Reintentando en 500ms...
+[Auth WARN] debug-enabled
+[Auth WARN] debug-enabled
