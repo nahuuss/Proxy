@@ -1,3 +1,0 @@
-module.exports=[23322,e=>{"use strict";async function s(){{let{proxyManager:s}=await e.A(43102);await s.init(),console.log("[Instrumentation] ProxyManager initialized and ports opened.")}}e.s(["register",0,s])},43102,e=>{e.v(s=>Promise.all(["server/chunks/[externals]__0dqi~55._.js","server/chunks/_0cfrfsa._.js"].map(s=>e.l(s))).then(()=>s(23282)))}];
-
-//# sourceMappingURL=src_04_oy8m._.js.map

@@ -1,7 +1,0 @@
--- Registro de SQL: Versión 1.3
--- Fecha: 2026-03-20
--- Detalle: No se requieren cambios en el esquema de base de datos SQL para esta implementación.
--- La persistencia de los conectores y sus métricas en vivo se gestiona mediante:
--- 1. `src/data/connectors.json` (Configuración estática)
--- 2. Memoria volátil del `ProxyManager` (Estadísticas en tiempo real)
--- 3. `.env.local` (Configuración de autenticación SSO)

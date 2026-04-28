@@ -42,21 +42,21 @@ function NtlmLoginForm() {
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
-            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#1E3A5F", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Usuario</label>
+            <label style={{ display: "block", fontSize: "12px", color: "#1E3A5F", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Usuario</label>
             <input name="username" type="text" autoComplete="username" autoFocus required
               style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #93C5FD", borderRadius: "8px", fontSize: "14px", outline: "none", boxSizing: "border-box", color: "#111827", backgroundColor: "#F0F7FF" }}
               placeholder="usuario.nombre" />
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#1E3A5F", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Contraseña</label>
+            <label style={{ display: "block", fontSize: "12px", color: "#1E3A5F", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Contraseña</label>
             <input name="password" type="password" autoComplete="current-password" required
               style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #93C5FD", borderRadius: "8px", fontSize: "14px", outline: "none", boxSizing: "border-box", color: "#111827", backgroundColor: "#F0F7FF" }}
               placeholder="••••••••" />
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#1E3A5F", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Dominio</label>
+            <label style={{ display: "block", fontSize: "12px", color: "#1E3A5F", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Dominio</label>
             <input name="domain" type="text" defaultValue="SERENASEGUROS"
               style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #93C5FD", borderRadius: "8px", fontSize: "14px", outline: "none", boxSizing: "border-box", color: "#111827", backgroundColor: "#F0F7FF" }} />
           </div>
