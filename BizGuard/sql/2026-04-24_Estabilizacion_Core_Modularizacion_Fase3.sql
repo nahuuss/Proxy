@@ -1,0 +1,14 @@
+-- ==================================================================================
+-- IMPLEMENTACIÓN: Estabilización Core y Modularización de Reglas (Fase 3)
+-- FECHA: 2026-04-24
+-- AUTOR: Antigravity (BizGuard Assistant)
+-- ==================================================================================
+-- NOTA: Esta implementación NO requiere cambios en el esquema de la base de datos SQL.
+-- La lógica ha sido implementada a nivel de middleware (Proxy Server) y mediante
+-- el sistema modular de reglas en TypeScript.
+-- 
+-- RESUMEN TÉCNICO:
+-- 1. Se añade el sistema de "Rules" para segregación de lógica por conector.
+-- 2. Se implementa el bypass de redirección JS para evitar el error de carga infinita.
+-- 3. Se restringe el HB pasivo al tipo de conector 'core'.
+-- ==================================================================================

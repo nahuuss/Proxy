@@ -13,7 +13,7 @@ export interface Connector {
   bypassAuth?: boolean;
   strictTls?: boolean;
   hbForceUrls?: string[];
-  connectorType?: 'generic' | 'dynamics-crm' | 'core' | 'bank';
+  connectorType?: 'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test';
   isNtlm?: boolean;
   ntlmDomain?: string;
   entryPath?: string;

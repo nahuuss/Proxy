@@ -1,0 +1,40 @@
+[28/4/2026, 10:55:36] [Connector-Match] Port 8081 matched connector "test-port". Host: localhost:8081 -> core2.bzld.click:8081
+[28/4/2026, 10:55:36] [INIT] fullHost=core2.bzld.click:8081 | cookieDomain=.bzld.click | protocol=https
+[28/4/2026, 10:55:36] [INIT] redirectProxyUrl=https://core2.bzld.click:8081/api/auth | dynamicCallbackUrl=https://core2.bzld.click:8081/api/auth/callback/microsoft-entra-id
+[28/4/2026, 10:55:36] Redirect callback: URL=https://localhost:8081/, BaseURL=https://bank.bzld.click, DynamicHost=core2.bzld.click:8081
+[28/4/2026, 10:55:36] [same-domain-check] urlDomain=localhost | baseDomain=bzld.click
+[28/4/2026, 10:55:36] [redirect->RETURN] Fallback to effectiveBase: https://bank.bzld.click
+[28/4/2026, 10:55:37] [Dynamic-Fallback] Host still empty for URL: undefined | Data: {"headers":{}}
+[28/4/2026, 10:55:37] [INIT] fullHost=(empty) | cookieDomain=(none) | protocol=https
+[28/4/2026, 10:55:37] [INIT] redirectProxyUrl=https://bank.bzld.click/api/auth | dynamicCallbackUrl=(undefined)
+[28/4/2026, 10:55:37] [URL-Hint] Extracted real host from redirect URL: bank.bzld.click
+[28/4/2026, 10:55:37] Redirect callback: URL=https://bank.bzld.click, BaseURL=https://bank.bzld.click, DynamicHost=bank.bzld.click
+[28/4/2026, 10:55:37] [same-domain-check] urlDomain=bzld.click | baseDomain=bzld.click
+[28/4/2026, 10:55:37] [redirect->RETURN] Same domain, pass-through: https://bank.bzld.click
+[28/4/2026, 10:55:50] [Connector-Match] Port 8081 matched connector "test-port". Host: localhost:8081 -> core2.bzld.click:8081
+[28/4/2026, 10:55:50] [INIT] fullHost=core2.bzld.click:8081 | cookieDomain=.bzld.click | protocol=https
+[28/4/2026, 10:55:50] [INIT] redirectProxyUrl=https://core2.bzld.click:8081/api/auth | dynamicCallbackUrl=https://core2.bzld.click:8081/api/auth/callback/microsoft-entra-id
+[28/4/2026, 10:55:50] Redirect callback: URL=https://localhost:8081/, BaseURL=https://bank.bzld.click, DynamicHost=core2.bzld.click:8081
+[28/4/2026, 10:55:50] [same-domain-check] urlDomain=localhost | baseDomain=bzld.click
+[28/4/2026, 10:55:50] [redirect->RETURN] Fallback to effectiveBase: https://bank.bzld.click
+[28/4/2026, 10:55:51] [Dynamic-Fallback] Host still empty for URL: undefined | Data: {"headers":{}}
+[28/4/2026, 10:55:51] [INIT] fullHost=(empty) | cookieDomain=(none) | protocol=https
+[28/4/2026, 10:55:51] [INIT] redirectProxyUrl=https://bank.bzld.click/api/auth | dynamicCallbackUrl=(undefined)
+[28/4/2026, 10:55:51] [URL-Hint] Extracted real host from redirect URL: bank.bzld.click
+[28/4/2026, 10:55:51] Redirect callback: URL=https://bank.bzld.click, BaseURL=https://bank.bzld.click, DynamicHost=bank.bzld.click
+[28/4/2026, 10:55:51] [same-domain-check] urlDomain=bzld.click | baseDomain=bzld.click
+[28/4/2026, 10:55:51] [redirect->RETURN] Same domain, pass-through: https://bank.bzld.click
+[28/4/2026, 10:56:28] [Dynamic-Fallback] Host still empty for URL: undefined | Data: {"headers":{}}
+[28/4/2026, 10:56:28] [INIT] fullHost=(empty) | cookieDomain=(none) | protocol=https
+[28/4/2026, 10:56:28] [INIT] redirectProxyUrl=https://bank.bzld.click/api/auth | dynamicCallbackUrl=(undefined)
+[28/4/2026, 10:56:28] [URL-Hint] Extracted real host from redirect URL: bank.bzld.click
+[28/4/2026, 10:56:28] Redirect callback: URL=https://bank.bzld.click, BaseURL=https://bank.bzld.click, DynamicHost=bank.bzld.click
+[28/4/2026, 10:56:28] [same-domain-check] urlDomain=bzld.click | baseDomain=bzld.click
+[28/4/2026, 10:56:28] [redirect->RETURN] Same domain, pass-through: https://bank.bzld.click
+[28/4/2026, 10:56:38] [Dynamic-Fallback] Host still empty for URL: undefined | Data: {"headers":{}}
+[28/4/2026, 10:56:38] [INIT] fullHost=(empty) | cookieDomain=(none) | protocol=https
+[28/4/2026, 10:56:38] [INIT] redirectProxyUrl=https://bank.bzld.click/api/auth | dynamicCallbackUrl=(undefined)
+[28/4/2026, 10:56:38] [URL-Hint] Extracted real host from redirect URL: bank.bzld.click
+[28/4/2026, 10:56:38] Redirect callback: URL=https://bank.bzld.click, BaseURL=https://bank.bzld.click, DynamicHost=bank.bzld.click
+[28/4/2026, 10:56:38] [same-domain-check] urlDomain=bzld.click | baseDomain=bzld.click
+[28/4/2026, 10:56:38] [redirect->RETURN] Same domain, pass-through: https://bank.bzld.click

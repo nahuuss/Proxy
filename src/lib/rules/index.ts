@@ -1,6 +1,7 @@
 import { ConnectorRules } from "./base";
 import { CoreRules } from "./core";
 import { BankRules } from "./bank";
+import { SerenaTestRules } from "./serena-test";
 import { GenericRules, CrmRules } from "./generic";
 
 export function getRulesFor(connectorType?: string): ConnectorRules {
@@ -9,6 +10,8 @@ export function getRulesFor(connectorType?: string): ConnectorRules {
       return new CoreRules();
     case 'bank':
       return new BankRules();
+    case 'serena-test':
+      return new SerenaTestRules();
     case 'dynamics-crm':
       return new CrmRules();
     default:

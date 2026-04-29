@@ -1,0 +1,15 @@
+-- ==================================================================================
+-- IMPLEMENTACIÓN: Creación del Producto 'Serena-Test' (Entorno de Staging)
+-- FECHA: 2026-04-29
+-- AUTOR: Antigravity (BizGuard Assistant)
+-- ==================================================================================
+-- NOTA: Esta implementación NO requiere cambios en el esquema de la base de datos SQL.
+-- El nuevo tipo de producto 'serena-test' es gestionado mediante NeDB (connectors.json)
+-- y validado por los tipos de TypeScript.
+-- 
+-- RESUMEN TÉCNICO:
+-- 1. Se crea src/lib/rules/serena-test.ts para lógica custom experimental.
+-- 2. Se actualiza el factory de reglas en src/lib/rules/index.ts.
+-- 3. Se añade 'serena-test' al esquema de Connector en src/lib/connectors.ts.
+-- 4. Se habilita visualmente en el Dashboard (ConnectorRow.tsx) con icono 🧪.
+-- ==================================================================================

@@ -12,6 +12,7 @@ const CONNECTOR_TYPES = [
   { value: 'dynamics-crm',  label: 'Dynamics CRM',      icon: '📊', desc: 'Microsoft Dynamics CRM on-premise. Habilita NTLM, reescritura de URLs y ruta de organización.' },
   { value: 'core',          label: 'Core',               icon: '🏦', desc: 'Sistema Core bancario. Customizaciones específicas para este producto.' },
   { value: 'bank',          label: 'Bank',               icon: '💳', desc: 'Portal bancario. Customizaciones específicas para este producto.' },
+  { value: 'serena-test',   label: 'Serena Test',        icon: '🧪', desc: 'Entorno de pruebas y staging para customizaciones experimentales.' },
 ] as const;
 
 function ConnectorTypeSection({ connectorType, onChange }: { connectorType?: string; onChange?: (type: string) => void }) {
@@ -65,11 +66,11 @@ function DynamicsCrmSection({ ntlmEnabled, onNtlmChange, ntlmDomain }: { ntlmEna
 
 export function ConnectorRow({ connector, isSelected }: { connector: Connector, isSelected?: boolean }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [selectedType, setSelectedType] = useState<'generic' | 'dynamics-crm' | 'core' | 'bank'>(connector.connectorType || 'generic');
+  const [selectedType, setSelectedType] = useState<'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test'>(connector.connectorType || 'generic');
   const [ntlmEnabled, setNtlmEnabled] = useState(connector.isNtlm === true);
 
   const handleTypeChange = (type: string) => {
-    setSelectedType(type as 'generic' | 'dynamics-crm' | 'core' | 'bank');
+    setSelectedType(type as 'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test');
     if (type === 'dynamics-crm') setNtlmEnabled(true);
   };
   const { connectors } = useStats();

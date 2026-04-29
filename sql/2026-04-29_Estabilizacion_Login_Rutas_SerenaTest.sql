@@ -1,0 +1,20 @@
+-- ==================================================================================
+-- ESTABILIZACIÓN: Fix Login (AJAX Delta) y Rutas Duplicadas en 'Serena-Test'
+-- FECHA: 2026-04-29
+-- AUTOR: Antigravity (BizGuard Assistant)
+-- ==================================================================================
+-- NOTA: Esta implementación NO requiere cambios en el esquema de la base de datos SQL.
+-- Todos los ajustes se realizaron en la capa de lógica de negocio (Rules Engine).
+-- 
+-- RESUMEN DE CAMBIOS TÉCNICOS:
+-- 1. Modificación de isHbEligible en serena-test.ts:
+--    - Exclusión de X-MicrosoftAjax (delta=true).
+--    - Exclusión de rutas /login e /ingreso.
+--    - Restricción de HB a subidas pesadas (multipart) y navegación tradicional.
+-- 
+-- 2. Implementación de rewriteBody en serena-test.ts:
+--    - Regex: /\/Portals\/[^"'<>]*\/Portals\//gi -> Limpia duplicación de DNN.
+--    - Regex: /([^:])\/\//g -> Normaliza dobles barras en rutas de archivos.
+-- 
+-- 3. Generación de Pack v1.3.2-Hotfix mediante preparar-despliegue.ps1.
+-- ==================================================================================
