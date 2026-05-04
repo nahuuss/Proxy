@@ -168,14 +168,16 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
 
           if (req.method === 'GET' || isPostLike) {
             logHB(`[HB-SHIELD] Pasivo (Spaces) ${path} | Iniciado tras ${Math.round((Date.now()-startTime)/1000)}s (${connector.id})`);
+            const isFullPageNav = !req.headers['x-requested-with'];
+
             res.writeHead(200, { 
-              'Content-Type': isPostLike ? 'application/json; charset=utf-8' : 'text/html; charset=utf-8', 
+              'Content-Type': isFullPageNav ? 'text/html; charset=utf-8' : (isPostLike ? 'application/json; charset=utf-8' : 'text/html; charset=utf-8'), 
               'Transfer-Encoding': 'chunked' 
             });
             
-            // Solo enviamos el spinner visual en peticiones GET de navegación real.
-            // Para POSTs (subidas) enviamos solo un espacio para mantener viva la conexión.
-            if (!isPostLike && req.method === 'GET') {
+            // Enviamos el spinner visual en navegaciones reales (GET o POST que no sean XHR).
+            // Si es un XHR o subida pesada pero sin navegación, enviamos solo un espacio.
+            if (isFullPageNav) {
               isHtmlCommentOpen = true;
               const hbInitSec = Math.round((Date.now() - startTime) / 1000);
               const m = Math.floor(hbInitSec/60), s = hbInitSec%60;
@@ -196,7 +198,7 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
           } else {
             logHB(`[HB-SHIELD] Activo (Polling/Job) ${path} tras ${Math.round((Date.now()-startTime)/1000)}s (${connector.id})`);
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-            res.end(renderBgJobPage(jobId || 'error'));
+            res.end(renderBgJobPage(jobId || 'error', req.headers['referer'] || '', incomingHost));
           }
         }
       }, remainingTime);
@@ -257,6 +259,10 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
             }
 
             const contentType = (fwdHeaders['content-type'] || '') as string;
+            const contentDisp = (fwdHeaders['content-disposition'] || '') as string;
+            const isFileDownload = contentDisp.includes("attachment") || 
+                           /excel|spreadsheetml|zip|pdf|octet-stream|wordprocessingml|presentationml/.test(contentType.toLowerCase());
+
             const isText = (contentType.includes('text') || contentType.includes('javascript') || contentType.includes('json') || contentType.includes('xml')) && 
                           !/\.(png|jpg|jpeg|gif|ico|cur|svg)$/i.test(urlPart);
 
@@ -268,8 +274,27 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
             }
 
             if (isHeartbeatActive) {
-              if (isHtmlCommentOpen) res.write('-->');
-              res.write(responseBody); res.end();
+              // Detección robusta de binarios post-NTLM
+              const firstKB = responseBody.subarray(0, 2048);
+              const pkIdx = firstKB.indexOf(Buffer.from([0x50, 0x4B]));
+              const pdfIdx = firstKB.indexOf(Buffer.from([0x25, 0x50, 0x44, 0x46]));
+              const oleIdx = firstKB.indexOf(Buffer.from([0xD0, 0xCF, 0x11, 0xE0]));
+
+              const isPK = pkIdx !== -1;
+              const isPDF = pdfIdx !== -1;
+              const isOLE = oleIdx !== -1;
+
+              if (isPK || isPDF || isOLE || isFileDownload) {
+                let finalBuffer = responseBody;
+                if (isPK && pkIdx > 0) finalBuffer = responseBody.subarray(pkIdx);
+                else if (isPDF && pdfIdx > 0) finalBuffer = responseBody.subarray(pdfIdx);
+                else if (isOLE && oleIdx > 0) finalBuffer = responseBody.subarray(oleIdx);
+
+                serveAsBlobDownload(res, req, finalBuffer, fwdHeaders, incomingHost, isHtmlCommentOpen);
+              } else {
+                if (isHtmlCommentOpen) res.write('-->');
+                res.write(responseBody); res.end();
+              }
             } else {
               fwdHeaders['content-length'] = String(responseBody.length);
               res.writeHead(ntlmRes.statusCode, fwdHeaders); res.end(responseBody);
@@ -307,12 +332,12 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
       const contentEncoding = (proxyRes.headers["content-encoding"] || "").toLowerCase();
 
       const isFileDownload = contentDisp.includes("attachment") || 
-                     /excel|spreadsheetml|zip|pdf|octet-stream/.test(contentType);
+                     /excel|spreadsheetml|zip|pdf|octet-stream|wordprocessingml|presentationml/.test(contentType);
 
       if (isFileDownload && hbTimer) { clearTimeout(hbTimer); hbTimer = null; }
 
       const isText = contentType.includes("text") || contentType.includes("javascript") || contentType.includes("json") || contentType.includes("xml");
-      const needsRewrite = !isFileDownload && (isText || isHeartbeatActive);
+      const needsRewrite = isHeartbeatActive || (!isFileDownload && isText);
       const finalHeaders = rewriteHeaders(proxyRes.headers, targetUrl, incomingHost);
 
       // ─── REDIRECT HANDLING POST-HB ─────────────────────────────────────────
@@ -351,15 +376,36 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
             } catch (e: any) { logHB(`[HB-WARN] Failed to decompress: ${e.message}`); }
           }
 
-          const isPK = buffer.length > 2 && buffer[0] === 0x50 && buffer[1] === 0x4B;
-          const isPDF = buffer.length > 4 && buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+          // ─── DETECCIÓN ROBUSTA DE BINARIOS ─────────────────────────────────────
+          // Buscamos firmas en los primeros 2KB para ignorar basura/espacios iniciales.
+          const firstKB = buffer.subarray(0, 2048);
+          const pkIdx = firstKB.indexOf(Buffer.from([0x50, 0x4B, 0x03, 0x04]));
+          const pkIdxShort = firstKB.indexOf(Buffer.from([0x50, 0x4B]));
+          const pdfIdx = firstKB.indexOf(Buffer.from([0x25, 0x50, 0x44, 0x46]));
+          const oleIdx = firstKB.indexOf(Buffer.from([0xD0, 0xCF, 0x11, 0xE0]));
 
-          if (isHeartbeatActive && (isPK || isPDF || isFileDownload)) {
-            serveAsBlobDownload(res, req, buffer, proxyRes.headers, incomingHost, isHtmlCommentOpen);
+          const finalPkIdx = pkIdx !== -1 ? pkIdx : pkIdxShort;
+          const isPK = finalPkIdx !== -1;
+          const isPDF = pdfIdx !== -1;
+          const isOLE = oleIdx !== -1;
+
+          if (isHeartbeatActive && (isPK || isPDF || isOLE || isFileDownload)) {
+            let finalBuffer = buffer;
+            if (isPK && finalPkIdx > 0) {
+              logHB(`[HB-GUARD] PK detectado en offset ${finalPkIdx}, recortando buffer...`);
+              finalBuffer = buffer.subarray(finalPkIdx);
+            } else if (isPDF && pdfIdx > 0) {
+              logHB(`[HB-GUARD] PDF detectado en offset ${pdfIdx}, recortando buffer...`);
+              finalBuffer = buffer.subarray(pdfIdx);
+            } else if (isOLE && oleIdx > 0) {
+              logHB(`[HB-GUARD] OLE detectado en offset ${oleIdx}, recortando buffer...`);
+              finalBuffer = buffer.subarray(oleIdx);
+            }
+            serveAsBlobDownload(res, req, finalBuffer, proxyRes.headers, incomingHost, isHtmlCommentOpen);
             return;
           }
 
-          if (isText && !isPK && !isPDF) {
+          if (isText && !isPK && !isPDF && !isOLE) {
             let body = buffer.toString("utf8");
             body = applyDeepRewrite(body, targetUrl, incomingHost);
             body = body.replace(/0\.0\.0\.0:3000/g, incomingHost);
