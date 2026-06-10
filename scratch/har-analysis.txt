@@ -1,0 +1,421 @@
+﻿
+================================================================================
+FILE: core.serenaart.com.ar-rds.har
+Total requests: 165
+================================================================================
+
+--- STATUS CODE DISTRIBUTION ---
+  HTTP 101: 1 requests
+  HTTP 200: 162 requests
+  HTTP 404: 2 requests
+
+--- HTTP METHODS ---
+  GET: 161
+  POST: 4
+
+--- UPLOAD / IMPORT REQUESTS ---
+  [162] 2026-06-05T13:50:12.567Z
+       POST https://core.serenaart.com.ar/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+       Status: 200 | Time: 213ms
+
+--- SSE / STREAMING REQUESTS ---
+  (none detected)
+
+--- HEARTBEAT / PING REQUESTS ---
+  (none detected)
+
+--- SLOW REQUESTS (>2s) ---
+  [154] GET wss://core.serenaart.com.ar/signalr/connect?transport=webSockets&clientProtocol=1.5&Username=serenaseguros%5Cleandro.bla
+       Status: 101 | Time: 110.24s | Started: 2026-06-05T13:50:00.961Z
+  [163] POST https://core.serenaart.com.ar/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+       Status: 200 | Time: 79.51s | Started: 2026-06-05T13:50:12.781Z
+
+--- ERROR REQUESTS (4xx/5xx/0) ---
+  [18] GET https://core.serenaart.com.ar/App_Themes/OmintTheme/Web/Menu.css?v=639162535570897912
+       Status: 404 | Time: 217ms | Started: 2026-06-05T13:49:59.969Z
+  [146] GET https://core.serenaart.com.ar/images/ui-bg_diagonals-thick_20_666666_40x40.png
+       Status: 404 | Time: 253ms | Started: 2026-06-05T13:50:00.461Z
+
+--- CONNECTOR/UPLOAD RELATED URLS ---
+  [38] GET https://core.serenaart.com.ar/Js/jquery.fileDownload.js?v=639162535570897912
+       Status: 200 | Time: 187ms | MimeType: application/javascript
+  [90] GET https://core.serenaart.com.ar/SIN/Js/Controles/LiquidacionPracticaMedica/ImportadorLiquidacion.js?v=639162535570206151
+       Status: 200 | Time: 188ms | MimeType: application/javascript
+
+--- TIMELINE ---
+  First: 2026-06-05T13:49:59.775Z
+  Last:  2026-06-05T13:51:32.354Z
+  Session duration: 92.58s
+
+--- TOP 10 SLOWEST REQUESTS ---
+  #1    110.24s | HTTP 101 | GET wss://core.serenaart.com.ar/signalr/connect?transport=webSockets&clientProtocol=1.5&Username=serenas
+  #2     79.51s | HTTP 200 | POST https://core.serenaart.com.ar/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+  #3      253ms | HTTP 404 | GET https://core.serenaart.com.ar/images/ui-bg_diagonals-thick_20_666666_40x40.png
+  #4      217ms | HTTP 404 | GET https://core.serenaart.com.ar/App_Themes/OmintTheme/Web/Menu.css?v=639162535570897912
+  #5      213ms | HTTP 200 | POST https://core.serenaart.com.ar/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+  #6      197ms | HTTP 200 | GET https://core.serenaart.com.ar/SIN/Js/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.js?
+  #7      192ms | HTTP 200 | GET https://core.serenaart.com.ar/Js/html2canvas.min.js?v=639162535570897912
+  #8      190ms | HTTP 200 | GET https://core.serenaart.com.ar/signalr/hubs?v=639162535570897912
+  #9      188ms | HTTP 200 | GET https://core.serenaart.com.ar/SIN/Js/Controles/SelectorFacturaPracticaMedica/SelectorFacturaPractica
+  #10      188ms | HTTP 200 | GET https://core.serenaart.com.ar/SIN/Js/Controles/LiquidacionPracticaMedica/ImportadorLiquidacion.js?v=
+
+--- UNIQUE HOSTS ---
+  core.serenaart.com.ar
+
+--- WEBSOCKET CONNECTIONS (HTTP 101) ---
+  GET wss://core.serenaart.com.ar/signalr/connect?transport=webSockets&clientProtocol=1.5&Username=serenaseguros%5Cleandro.blanco&connectionToken=CyZHQpbuSAtLafC8yzJrGD3D5XY2He5VulGnrKM7V5Hdgcm3J6%2F0oYFPNQgmO7oS%2Bud9PL4XiF8vG0kJiHts9jgj7bKcQj6cS4AQdcDTTdJMt5rPt4L7XbGVu98NJIKN&connectionData=%5B%7B%22name%22%3A%22signalrhub%22%7D%5D&tid=0
+  Time: 110.24s | WS Messages: 12
+  Last 5 WS messages:
+    [receive] T+1780667471ms: {}
+    [receive] T+1780667481ms: {}
+    [receive] T+1780667491ms: {}
+    [receive] T+1780667501ms: {}
+    [receive] T+1780667511ms: {}
+
+================================================================================
+FILE: coretest.serenaart.com.ar-rds.har
+Total requests: 167
+================================================================================
+
+--- STATUS CODE DISTRIBUTION ---
+  HTTP 101: 1 requests
+  HTTP 200: 164 requests
+  HTTP 404: 2 requests
+
+--- HTTP METHODS ---
+  GET: 163
+  POST: 4
+
+--- UPLOAD / IMPORT REQUESTS ---
+  [164] 2026-06-05T13:56:52.531Z
+       POST https://coretest.serenaart.com.ar/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+       Status: 200 | Time: 98ms
+
+--- SSE / STREAMING REQUESTS ---
+  (none detected)
+
+--- HEARTBEAT / PING REQUESTS ---
+  (none detected)
+
+--- SLOW REQUESTS (>2s) ---
+  [158] GET wss://coretest.serenaart.com.ar/signalr/connect?transport=webSockets&clientProtocol=1.5&Username=serenaseguros%5Cleandro
+       Status: 101 | Time: 30.97s | Started: 2026-06-05T13:56:46.628Z
+  [165] POST https://coretest.serenaart.com.ar/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+       Status: 200 | Time: 9.28s | Started: 2026-06-05T13:56:52.632Z
+
+--- ERROR REQUESTS (4xx/5xx/0) ---
+  [19] GET https://coretest.serenaart.com.ar/App_Themes/OmintTheme/Web/Menu.css?v=639162539626559618
+       Status: 404 | Time: 155ms | Started: 2026-06-05T13:56:45.532Z
+  [150] GET https://coretest.serenaart.com.ar/images/ui-bg_diagonals-thick_20_666666_40x40.png
+       Status: 404 | Time: 73ms | Started: 2026-06-05T13:56:46.023Z
+
+--- CONNECTOR/UPLOAD RELATED URLS ---
+  [39] GET https://coretest.serenaart.com.ar/Js/jquery.fileDownload.js?v=639162539626559618
+       Status: 200 | Time: 267ms | MimeType: application/javascript
+  [94] GET https://coretest.serenaart.com.ar/SIN/Js/Controles/LiquidacionPracticaMedica/ImportadorLiquidacion.js?v=6391625396258684
+       Status: 200 | Time: 277ms | MimeType: application/javascript
+
+--- TIMELINE ---
+  First: 2026-06-05T13:56:45.328Z
+  Last:  2026-06-05T13:57:01.986Z
+  Session duration: 16.66s
+
+--- TOP 10 SLOWEST REQUESTS ---
+  #1     30.97s | HTTP 101 | GET wss://coretest.serenaart.com.ar/signalr/connect?transport=webSockets&clientProtocol=1.5&Username=ser
+  #2      9.28s | HTTP 200 | POST https://coretest.serenaart.com.ar/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.as
+  #3      288ms | HTTP 200 | GET https://coretest.serenaart.com.ar/SIN/Js/Controles/SelectorFacturaPracticaMedica/SelectorFacturaPrac
+  #4      279ms | HTTP 200 | GET https://coretest.serenaart.com.ar/GEN/Js/Controles/InformacionAuditoria/InformacionAuditoria.js?v=63
+  #5      278ms | HTTP 200 | GET https://coretest.serenaart.com.ar/SIN/Js/Controles/SelectorPrestadores/SelectorPrestadores.js?v=6391
+  #6      277ms | HTTP 200 | GET https://coretest.serenaart.com.ar/SIN/Js/Controles/LiquidacionPracticaMedica/ImportadorLiquidacion.j
+  #7      276ms | HTTP 200 | GET https://coretest.serenaart.com.ar/SIN/Js/Controles/SelectorPrestadores/BusquedaPrestadores.js?v=6391
+  #8      276ms | HTTP 200 | GET https://coretest.serenaart.com.ar/css/BandejaNotificaciones.css?v=639162539626618503
+  #9      276ms | HTTP 200 | GET https://coretest.serenaart.com.ar/GEN/Js/Controles/SelectorLocalidad/SelectorLocalidad.js?v=63916253
+  #10      274ms | HTTP 200 | GET https://coretest.serenaart.com.ar/GEN/Js/Controles/GeneracionTickets/GeneracionTickets.js?v=63916253
+
+--- UNIQUE HOSTS ---
+  coretest.serenaart.com.ar
+
+--- WEBSOCKET CONNECTIONS (HTTP 101) ---
+  GET wss://coretest.serenaart.com.ar/signalr/connect?transport=webSockets&clientProtocol=1.5&Username=serenaseguros%5Cleandro.blanco&connectionToken=bqKz9LElyzzAoO36GILvuY1yJx%2FZcUVxmfZm0c21DHI7WvzcTERt8uYAS9fU9meOwpG6Da0KmBEMoz2ubfqUNmNINSo9zLV9vLgmXl%2FC%2Ftv4ZUW8Pi9F7Z8Mbu4FECkN&connectionData=%5B%7B%22name%22%3A%22signalrhub%22%7D%5D&tid=7
+  Time: 30.97s | WS Messages: 5
+  Last 5 WS messages:
+    [receive] T+1780667807ms: {"C":"d-69548433-BT,0|Bc,0|Bd,1","S":1,"M":[]}
+    [receive] T+1780667808ms: {}
+    [receive] T+1780667818ms: {}
+    [receive] T+1780667828ms: {}
+    [receive] T+1780667838ms: {}
+
+================================================================================
+FILE: conector-test.har
+Total requests: 167
+================================================================================
+
+--- STATUS CODE DISTRIBUTION ---
+  HTTP 101: 1 requests
+  HTTP 200: 163 requests
+  HTTP 304: 1 requests
+  HTTP 404: 2 requests
+
+--- HTTP METHODS ---
+  GET: 163
+  POST: 4
+
+--- UPLOAD / IMPORT REQUESTS ---
+  [164] 2026-06-05T13:55:23.470Z
+       POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+       Status: 200 | Time: 465ms
+
+--- SSE / STREAMING REQUESTS ---
+  (none detected)
+
+--- HEARTBEAT / PING REQUESTS ---
+  (none detected)
+
+--- SLOW REQUESTS (>2s) ---
+  [161] GET ws://localhost:8081/signalr/connect?transport=webSockets&clientProtocol=1.5&Username=serenaseguros%5Cleandro.blanco&conn
+       Status: 101 | Time: 53.80s | Started: 2026-06-05T13:55:13.649Z
+  [165] POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+       Status: 200 | Time: 9.60s | Started: 2026-06-05T13:55:23.937Z
+  [143] GET http://localhost:8081/Images/excel.png?v=639162538671040404
+       Status: 200 | Time: 2.15s | Started: 2026-06-05T13:55:10.534Z
+  [142] GET http://localhost:8081/Images/clearFilter.png?v=639162538671040404
+       Status: 200 | Time: 2.15s | Started: 2026-06-05T13:55:10.534Z
+  [141] GET http://localhost:8081/Images/Omint%20iconos-01.png?v=639162538671020343
+       Status: 200 | Time: 2.12s | Started: 2026-06-05T13:55:10.534Z
+
+--- ERROR REQUESTS (4xx/5xx/0) ---
+  [19] GET http://localhost:8081/App_Themes/OmintTheme/Web/Menu.css?v=639162538670728530
+       Status: 404 | Time: 811ms | Started: 2026-06-05T13:55:10.137Z
+  [150] GET http://localhost:8081/images/ui-bg_diagonals-thick_20_666666_40x40.png
+       Status: 404 | Time: 741ms | Started: 2026-06-05T13:55:11.938Z
+
+--- CONNECTOR/UPLOAD RELATED URLS ---
+  [39] GET http://localhost:8081/Js/jquery.fileDownload.js?v=639162538670728530
+       Status: 200 | Time: 1.15s | MimeType: application/javascript
+  [94] GET http://localhost:8081/SIN/Js/Controles/LiquidacionPracticaMedica/ImportadorLiquidacion.js?v=639162538669677402
+       Status: 200 | Time: 1.60s | MimeType: application/javascript
+
+--- TIMELINE ---
+  First: 2026-06-05T13:55:09.255Z
+  Last:  2026-06-05T13:55:33.623Z
+  Session duration: 24.37s
+
+--- TOP 10 SLOWEST REQUESTS ---
+  #1     53.80s | HTTP 101 | GET ws://localhost:8081/signalr/connect?transport=webSockets&clientProtocol=1.5&Username=serenaseguros%5
+  #2      9.60s | HTTP 200 | POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+  #3      2.15s | HTTP 200 | GET http://localhost:8081/Images/excel.png?v=639162538671040404
+  #4      2.15s | HTTP 200 | GET http://localhost:8081/Images/clearFilter.png?v=639162538671040404
+  #5      2.12s | HTTP 200 | GET http://localhost:8081/Images/Omint%20iconos-01.png?v=639162538671020343
+  #6      1.94s | HTTP 200 | GET http://localhost:8081/WebResource.axd?d=KxDDRFBFEDcKr0SAeqcai8EqIZu1yg7GYxUsw5pfiitsjpt22P2wlPOxyR2b
+  #7      1.94s | HTTP 200 | GET http://localhost:8081/Images/down.png
+  #8      1.94s | HTTP 200 | GET http://localhost:8081/Images/loadingProcess.gif
+  #9      1.94s | HTTP 200 | GET http://localhost:8081/Images/Info_yellow.png
+  #10      1.94s | HTTP 200 | GET http://localhost:8081/Images/Info_green.png
+
+--- UNIQUE HOSTS ---
+  localhost:8081
+
+--- WEBSOCKET CONNECTIONS (HTTP 101) ---
+  GET ws://localhost:8081/signalr/connect?transport=webSockets&clientProtocol=1.5&Username=serenaseguros%5Cleandro.blanco&connectionToken=LdSmuLVGI5DGGociBU3%2FNhe%2FYcLtT8afwuOdfN%2FEKJu6TGmdgp6J4MuDL2q7x9w20bsJr5aoPegaVY2%2BfOd2sMj19BtItUVnVvQOWNFk7gWk3jyh%2F7DPx%2F%2Ff3AVisTJp&connectionData=%5B%7B%22name%22%3A%22signalrhub%22%7D%5D&tid=2
+  Time: 53.80s | WS Messages: 7
+  Last 5 WS messages:
+    [receive] T+1780667727ms: {}
+    [receive] T+1780667737ms: {}
+    [receive] T+1780667747ms: {}
+    [receive] T+1780667757ms: {}
+    [receive] T+1780667767ms: {}
+
+================================================================================
+FILE: conector-prod.har
+Total requests: 169
+================================================================================
+
+--- STATUS CODE DISTRIBUTION ---
+  HTTP 101: 1 requests
+  HTTP 200: 166 requests
+  HTTP 404: 2 requests
+
+--- HTTP METHODS ---
+  GET: 165
+  POST: 4
+
+--- UPLOAD / IMPORT REQUESTS ---
+  [167] 2026-06-05T13:58:45.905Z
+       POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+       Status: 200 | Time: 1.32s
+
+--- SSE / STREAMING REQUESTS ---
+  (none detected)
+
+--- HEARTBEAT / PING REQUESTS ---
+  (none detected)
+
+--- SLOW REQUESTS (>2s) ---
+  [164] GET ws://localhost:8081/signalr/connect?transport=webSockets&clientProtocol=1.5&Username=serenaseguros%5Cleandro.blanco&conn
+       Status: 101 | Time: 134.23s | Started: 2026-06-05T13:58:38.090Z
+  [168] POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+       Status: 200 | Time: 81.95s | Started: 2026-06-05T13:58:47.233Z
+  [142] GET http://localhost:8081/Images/clearFilter.png?v=639162540717323660
+       Status: 200 | Time: 2.40s | Started: 2026-06-05T13:58:34.628Z
+  [143] GET http://localhost:8081/Images/excel.png?v=639162540717323660
+       Status: 200 | Time: 2.39s | Started: 2026-06-05T13:58:34.628Z
+
+--- ERROR REQUESTS (4xx/5xx/0) ---
+  [19] GET http://localhost:8081/App_Themes/OmintTheme/Web/Menu.css?v=639162540716634345
+       Status: 404 | Time: 494ms | Started: 2026-06-05T13:58:34.601Z
+  [150] GET http://localhost:8081/images/ui-bg_diagonals-thick_20_666666_40x40.png
+       Status: 404 | Time: 691ms | Started: 2026-06-05T13:58:35.741Z
+
+--- CONNECTOR/UPLOAD RELATED URLS ---
+  [39] GET http://localhost:8081/Js/jquery.fileDownload.js?v=639162540716634345
+       Status: 200 | Time: 891ms | MimeType: application/javascript
+  [94] GET http://localhost:8081/SIN/Js/Controles/LiquidacionPracticaMedica/ImportadorLiquidacion.js?v=639162540715902207
+       Status: 200 | Time: 1.10s | MimeType: application/javascript
+
+--- TIMELINE ---
+  First: 2026-06-05T13:58:34.028Z
+  Last:  2026-06-05T13:58:47.233Z
+  Session duration: 13.21s
+
+--- TOP 10 SLOWEST REQUESTS ---
+  #1    134.23s | HTTP 101 | GET ws://localhost:8081/signalr/connect?transport=webSockets&clientProtocol=1.5&Username=serenaseguros%5
+  #2     81.95s | HTTP 200 | POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+  #3      2.40s | HTTP 200 | GET http://localhost:8081/Images/clearFilter.png?v=639162540717323660
+  #4      2.39s | HTTP 200 | GET http://localhost:8081/Images/excel.png?v=639162540717323660
+  #5      1.79s | HTTP 200 | GET http://localhost:8081/Images/Omint%20iconos-01.png?v=639162540717306192
+  #6      1.58s | HTTP 200 | GET http://localhost:8081/images/notificaciones.png?v=639162540716695395
+  #7      1.32s | HTTP 200 | POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+  #8      1.31s | HTTP 200 | GET http://localhost:8081/images/operador.png?v=639162540716695395
+  #9      1.31s | HTTP 200 | GET http://localhost:8081/images/ayuda.png?v=639162540716695395
+  #10      1.29s | HTTP 200 | GET http://localhost:8081/Js/SignalR/SignalRHub.js?v=639162540717343760
+
+--- UNIQUE HOSTS ---
+  localhost:8081
+
+--- WEBSOCKET CONNECTIONS (HTTP 101) ---
+  GET ws://localhost:8081/signalr/connect?transport=webSockets&clientProtocol=1.5&Username=serenaseguros%5Cleandro.blanco&connectionToken=fv7ZnXleCtlTBu4QPcEBrUR7hhZ4rZ03NsImUz2eG2lbF%2Bk57Wm18cgmAtmB66WHLKZez%2BTbI%2BOtxY7cO88mZeeyU3ZBs41jLkK2qVwmZWEt2P3MQxzzi1SDZVVqEcQ%2F&connectionData=%5B%7B%22name%22%3A%22signalrhub%22%7D%5D&tid=5
+  Time: 134.23s | WS Messages: 15
+  Last 5 WS messages:
+    [receive] T+1780668012ms: {}
+    [receive] T+1780668022ms: {}
+    [receive] T+1780668032ms: {}
+    [receive] T+1780668042ms: {}
+    [receive] T+1780668052ms: {}
+
+================================================================================
+FILE: conector.har
+Total requests: 166
+================================================================================
+
+--- STATUS CODE DISTRIBUTION ---
+  HTTP 200: 156 requests
+  HTTP 404: 2 requests
+  HTTP 429: 8 requests
+
+--- HTTP METHODS ---
+  GET: 161
+  POST: 5
+
+--- UPLOAD / IMPORT REQUESTS ---
+  [163] 2026-06-05T13:43:22.301Z
+       POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+       Status: 429 | Time: 305ms
+  [164] 2026-06-05T13:44:16.185Z
+       POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+       Status: 200 | Time: 288ms
+
+--- SSE / STREAMING REQUESTS ---
+  (none detected)
+
+--- HEARTBEAT / PING REQUESTS ---
+  (none detected)
+
+--- SLOW REQUESTS (>2s) ---
+  [165] POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+       Status: 200 | Time: 90.41s | Started: 2026-06-05T13:44:16.475Z
+
+--- ERROR REQUESTS (4xx/5xx/0) ---
+  [19] GET http://localhost:8081/App_Themes/OmintTheme/Web/Menu.css?v=639162531472139534
+       Status: 404 | Time: 269ms | Started: 2026-06-05T13:43:10.132Z
+  [141] GET http://localhost:8081/Images/Omint%20iconos-01.png?v=639162531472787216
+       Status: 429 | Time: 940ms | Started: 2026-06-05T13:43:10.251Z
+  [142] GET http://localhost:8081/Images/clearFilter.png?v=639162531472807277
+       Status: 429 | Time: 943ms | Started: 2026-06-05T13:43:10.251Z
+  [143] GET http://localhost:8081/Images/excel.png?v=639162531472807277
+       Status: 429 | Time: 943ms | Started: 2026-06-05T13:43:10.251Z
+  [150] GET http://localhost:8081/images/ui-bg_diagonals-thick_20_666666_40x40.png
+       Status: 404 | Time: 134ms | Started: 2026-06-05T13:43:11.084Z
+  [155] POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+       Status: 429 | Time: 32ms | Started: 2026-06-05T13:43:11.469Z
+  [157] GET http://localhost:8081/signalr/negotiate?clientProtocol=1.5&Username=serenaseguros%5Cleandro.blanco&connectionData=%5B%7B
+       Status: 429 | Time: 255ms | Started: 2026-06-05T13:43:11.523Z
+  [158] POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+       Status: 429 | Time: 116ms | Started: 2026-06-05T13:43:11.634Z
+  [159] GET http://localhost:8081/favicon.ico
+       Status: 429 | Time: 136ms | Started: 2026-06-05T13:43:11.648Z
+  [163] POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+       Status: 429 | Time: 305ms | Started: 2026-06-05T13:43:22.301Z
+
+--- CONNECTOR/UPLOAD RELATED URLS ---
+  [39] GET http://localhost:8081/Js/jquery.fileDownload.js?v=639162531472139534
+       Status: 200 | Time: 719ms | MimeType: application/javascript
+  [94] GET http://localhost:8081/SIN/Js/Controles/LiquidacionPracticaMedica/ImportadorLiquidacion.js?v=639162531470129336
+       Status: 200 | Time: 873ms | MimeType: application/javascript
+
+--- TIMELINE ---
+  First: 2026-06-05T13:43:09.560Z
+  Last:  2026-06-05T13:44:16.475Z
+  Session duration: 66.92s
+
+--- TOP 10 SLOWEST REQUESTS ---
+  #1     90.41s | HTTP 200 | POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+  #2      999ms | HTTP 200 | GET http://localhost:8081/images/operador.png?v=639162531472407865
+  #3      998ms | HTTP 200 | GET http://localhost:8081/images/ayuda.png?v=639162531472407865
+  #4      996ms | HTTP 200 | GET http://localhost:8081/images/notificaciones.png?v=639162531472407865
+  #5      943ms | HTTP 429 | GET http://localhost:8081/Images/excel.png?v=639162531472807277
+  #6      943ms | HTTP 429 | GET http://localhost:8081/Images/clearFilter.png?v=639162531472807277
+  #7      942ms | HTTP 200 | GET http://localhost:8081/css/BandejaNotificaciones.css?v=639162531472407865
+  #8      940ms | HTTP 429 | GET http://localhost:8081/Images/Omint%20iconos-01.png?v=639162531472787216
+  #9      937ms | HTTP 200 | GET http://localhost:8081/GEN/Js/Controles/GeneracionTickets/GeneracionTickets.js?v=639162531470129336
+  #10      875ms | HTTP 200 | GET http://localhost:8081/SIN/Js/Controles/SelectorPrestadores/BusquedaPrestadores.js?v=6391625314701293
+
+--- UNIQUE HOSTS ---
+  localhost:8081
+
+--- RATE LIMIT (429) REQUESTS ---
+  GET http://localhost:8081/Images/Omint%20iconos-01.png?v=639162531472787216
+  Time: 940ms | Started: 2026-06-05T13:43:10.251Z
+  Retry-After: 60
+  GET http://localhost:8081/Images/clearFilter.png?v=639162531472807277
+  Time: 943ms | Started: 2026-06-05T13:43:10.251Z
+  Retry-After: 60
+  GET http://localhost:8081/Images/excel.png?v=639162531472807277
+  Time: 943ms | Started: 2026-06-05T13:43:10.251Z
+  Retry-After: 60
+  POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+  Time: 32ms | Started: 2026-06-05T13:43:11.469Z
+  Retry-After: 60
+  GET http://localhost:8081/signalr/negotiate?clientProtocol=1.5&Username=serenaseguros%5Cleandro.blanco&connectionData=%5B%7B
+  Time: 255ms | Started: 2026-06-05T13:43:11.523Z
+  Retry-After: 60
+  POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+  Time: 116ms | Started: 2026-06-05T13:43:11.634Z
+  Retry-After: 60
+  GET http://localhost:8081/favicon.ico
+  Time: 136ms | Started: 2026-06-05T13:43:11.648Z
+  Retry-After: 60
+  POST http://localhost:8081/SIN/LiquidacionPracticaMedica/ConsultaLiquidacionPracticaMedica.aspx
+  Time: 305ms | Started: 2026-06-05T13:43:22.301Z
+  Retry-After: 60
+
+
+================================================================================
+SUMMARY COMPARISON
+================================================================================
+File                                         | Reqs  | Errors | Slow | Uploads | SSE | HB
+--------------------------------------------------------------------------------
+core.serenaart.com.ar-rds.har                |   165 |      2 |    2 |       1 |   0 | 0
+coretest.serenaart.com.ar-rds.har            |   167 |      2 |    2 |       1 |   0 | 0
+conector-test.har                            |   167 |      2 |    5 |       1 |   0 | 0
+conector-prod.har                            |   169 |      2 |    4 |       1 |   0 | 0
+conector.har                                 |   166 |     10 |    1 |       2 |   0 | 0

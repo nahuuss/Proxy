@@ -1,0 +1,233 @@
+<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+<meta charset="utf-8">
+<title>Reporte Gerencial - BizGuard Proxy</title>
+<!--[if gte mso 9]>
+<xml>
+<w:WordDocument>
+<w:View>Print</w:View>
+<w:Zoom>100</w:Zoom>
+<w:DoNotOptimizeForBrowser/>
+</w:WordDocument>
+</xml>
+<![endif]-->
+<style>
+@page {
+    size: A4;
+    margin: 2.5cm 2.5cm 2.5cm 2.5cm;
+}
+body {
+    font-family: 'Calibri', 'Arial', sans-serif;
+    color: #333333;
+    line-height: 1.6;
+}
+h1 {
+    color: #1B365D;
+    text-align: center;
+    font-size: 24pt;
+    margin-top: 0px;
+    margin-bottom: 5pt;
+    font-weight: bold;
+}
+.subtitle {
+    color: #4A90E2;
+    text-align: center;
+    font-size: 13pt;
+    font-style: italic;
+    margin-bottom: 25pt;
+}
+hr {
+    border: 0;
+    border-top: 1px solid #D1D5DB;
+    margin-bottom: 20pt;
+}
+.intro {
+    font-size: 11.5pt;
+    margin-bottom: 25pt;
+    text-align: justify;
+    color: #4B5563;
+}
+h2 {
+    color: #1B365D;
+    font-size: 15pt;
+    border-bottom: 1.5px solid #D1D5DB;
+    padding-bottom: 4pt;
+    margin-top: 25pt;
+    margin-bottom: 12pt;
+    font-weight: bold;
+}
+p {
+    font-size: 11pt;
+    margin-top: 0px;
+    margin-bottom: 10pt;
+    text-align: justify;
+}
+ul {
+    margin-top: 5pt;
+    margin-bottom: 15pt;
+    padding-left: 20px;
+}
+li {
+    font-size: 11pt;
+    margin-bottom: 8pt;
+    text-align: justify;
+}
+.bold-label {
+    font-weight: bold;
+    color: #1B365D;
+}
+.bold-problem {
+    font-weight: bold;
+    color: #D97706; /* Color ámbar/alerta sutil para problemas */
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 25pt;
+    margin-bottom: 25pt;
+}
+th {
+    background-color: #F2F4F8;
+    color: #1B365D;
+    font-weight: bold;
+    border: 1px solid #D1D5DB;
+    padding: 10pt 8pt;
+    text-align: left;
+    font-size: 11pt;
+}
+td {
+    border: 1px solid #D1D5DB;
+    padding: 10pt 8pt;
+    font-size: 10.5pt;
+    vertical-align: top;
+}
+.footer {
+    text-align: center;
+    font-size: 8.5pt;
+    color: #9CA3AF;
+    margin-top: 50pt;
+    border-top: 1px solid #E5E7EB;
+    padding-top: 12pt;
+}
+</style>
+</head>
+<body>
+
+    <h1>🛡️ BizGuard Reverse Proxy</h1>
+    <div class="subtitle">Resumen Gerencial: Continuidad Operativa, UX y Retornos de Negocio por Producto</div>
+    
+    <hr>
+    
+    <p class="intro">
+        El proxy inverso <strong>BizGuard</strong> funciona como una aduana de seguridad y optimización digital inteligente. Su rol principal no es solo proteger nuestras plataformas desde el exterior, sino actuar como un "reparador invisible" que corrige problemas de diseño, caídas de conexión y pantallas de acceso complejas, traduciéndolas en una experiencia fluida, rápida y continua para nuestros colaboradores y clientes.
+    </p>
+
+    <h2>1. ⚙️ Core (core.serenaart.com.ar)</h2>
+    <p>La plataforma principal que sustenta la operación diaria y la carga crítica de trámites médicos de la compañía.</p>
+    <ul>
+        <li><span class="bold-problem">¿Qué fallaba o interrumpía la operación?</span>
+            <ul>
+                <li>Al subir múltiples documentos a la vez (como 11 PDFs de trámites médicos), la conexión se caía y la pantalla quedaba "cargando" indefinidamente, obligando a los usuarios a empezar de cero.</li>
+                <li>Los usuarios perdían permisos de edición (no podían modificar trámites) al conectarse desde fuera de la oficina, ya que el sistema interno no reconocía accesos externos de forma correcta.</li>
+                <li>Había riesgo de que ciertos archivos cargados se dañaran en el tránsito digital.</li>
+            </ul>
+        </li>
+        <li><span class="bold-label">¿Cómo lo repara BizGuard? (Beneficio de Negocio):</span>
+            <ul>
+                <li><strong>Cero Cortes en Subidas Largas:</strong> El proxy inyecta de forma silenciosa "señales de vida" a la red durante los procesamientos pesados. Esto evita que los sistemas de seguridad o la nube corten la comunicación por inactividad. El usuario experimenta una subida exitosa y sin pantallas congeladas.</li>
+                <li><strong>Mantenimiento de Permisos de Edición:</strong> Normaliza y traduce de forma automática las cabeceras de acceso de los colaboradores. La plataforma interna los identifica con sus roles completos de edición sin importar si están teletrabajando o en la oficina.</li>
+                <li><strong>Protección de Archivos (File Guard):</strong> Examina los documentos antes de ser procesados para garantizar que los PDFs y planillas de Excel no sufran alteraciones ni se corrompan, cuidando la calidad de la documentación.</li>
+            </ul>
+        </li>
+    </ul>
+
+    <h2>2. 👥 CRM (Microsoft Dynamics CRM 2013 on-premise)</h2>
+    <p>El canal comercial central para el seguimiento de clientes y la gestión de ventas de la organización.</p>
+    <ul>
+        <li><span class="bold-problem">¿Qué fallaba o interrumpía la operación?</span>
+            <ul>
+                <li>El inicio de sesión del CRM era confuso, requiriendo pantallas antiguas de Windows donde el usuario debía escribir campos complejos como el "Dominio corporativo" (SERENASEGUROS).</li>
+                <li>Al navegar, el CRM mostraba popups (ventanas emergentes), menús, logos o iconos completamente vacíos o rotos, entorpeciendo el trabajo comercial.</li>
+                <li>Tras ingresar las credenciales, el sistema cargaba una pantalla en blanco, obligando a los comerciales a escribir manualmente la dirección de acceso en la barra del navegador para poder trabajar.</li>
+            </ul>
+        </li>
+        <li><span class="bold-label">¿Cómo lo repara BizGuard? (Beneficio de Negocio):</span>
+            <ul>
+                <li><strong>Acceso Simplificado y Moderno:</strong> Reemplaza la pantalla de ingreso técnica por un portal limpio e intuitivo. Oculta el campo "Dominio" (completándolo automáticamente por detrás) y cambia etiquetas técnicas por términos familiares como "Legajo", acelerando el inicio de la jornada laboral.</li>
+                <li><strong>Corrección Visual en Tiempo Real:</strong> El proxy reescribe dinámicamente al vuelo las direcciones internas del servidor privado a direcciones web públicas válidas. Esto repara instantáneamente imágenes, iconos y menús rotos en ventanas emergentes.</li>
+                <li><strong>Redirección Directa al Trabajo:</strong> Automatiza el proceso de bienvenida. Una vez logueado, el usuario es conducido directamente al escritorio operativo del CRM, eliminando la pérdida de tiempo en pantallas vacías.</li>
+            </ul>
+        </li>
+    </ul>
+
+    <h2>3. 🧪 Hometest / Serena-Test (Entorno de Sandbox / Staging)</h2>
+    <p>La zona de pruebas segura de la compañía donde se diseñan y validan futuras optimizaciones digitales.</p>
+    <ul>
+        <li><span class="bold-problem">¿Qué fallaba o interrumpía la operación?</span>
+            <ul>
+                <li>Anteriormente, al implementar un nuevo cambio en las reglas de acceso o seguridad, se corría el riesgo de alterar o tumbar el sistema en producción, afectando a cientos de usuarios en vivo.</li>
+            </ul>
+        </li>
+        <li><span class="bold-label">¿Cómo lo repara BizGuard? (Beneficio de Negocio):</span>
+            <ul>
+                <li><strong>Aislamiento de Riesgo al 100%:</strong> BizGuard crea un entorno "espejo" idéntico al real pero completamente aislado de la producción. Los equipos técnicos pueden simular allí cargas extremas, probar nuevas subidas de archivos o ensayar reglas de red de forma segura. Si algo falla durante el ensayo, la operación en vivo no se entera ni se ve afectada en lo más mínimo.</li>
+            </ul>
+        </li>
+    </ul>
+
+    <h2>4. 🏦 Bank (Canal Transaccional Seguro)</h2>
+    <p>El portal financiero con las máximas exigencias de seguridad de la información y flujos transaccionales.</p>
+    <ul>
+        <li><span class="bold-problem">¿Qué fallaba o interrumpía la operación?</span>
+            <ul>
+                <li>Al intentar ingresar con la cuenta corporativa de Microsoft (SSO), los usuarios entraban en un bucle infinito que les pedía la contraseña una y otra vez, o arrojaba errores inesperados.</li>
+                <li>El sistema inyectaba accidentalmente códigos de control en flujos bancarios puros, lo que podía causar lentitud o malformaciones en la lectura de datos financieros.</li>
+            </ul>
+        </li>
+        <li><span class="bold-label">¿Cómo lo repara BizGuard? (Beneficio de Negocio):</span>
+            <ul>
+                <li><strong>Acceso Microsoft SSO Estable:</strong> BizGuard resuelve los conflictos de seguridad de red en las cookies de autenticación que generaban los bucles de login. El resultado es un ingreso corporativo inmediato, fluido y bajo un estricto modelo bancario de confianza cero (Zero-Trust).</li>
+                <li><strong>Transacciones Rápidas y Seguras:</strong> El proxy reconoce inteligentemente cuándo se están transfiriendo datos transaccionales (en formato JSON) y desactiva cualquier inyección de código de red sobre ellos. Esto asegura que las consultas financieras viajen a máxima velocidad y con absoluta integridad.</li>
+            </ul>
+        </li>
+    </ul>
+
+    <h2>📊 Resumen de Mejoras y Continuidad Operativa</h2>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 25%;">Aplicación / Módulo</th>
+                <th style="width: 35%;">¿Qué Reparaba o Bloqueaba al Usuario?</th>
+                <th style="width: 40%;">Beneficio Directo de Negocio con BizGuard</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Core (Operación Diaria)</strong></td>
+                <td>Pantallas colgadas y caídas de conexión al subir múltiples archivos pesados (trámites médicos). Pérdida de permisos de edición desde afuera.</td>
+                <td><strong>Subidas fluidas y continuas</strong> mediante impulsos de vida en red invisibles. Garantía de permisos de edición plenos desde cualquier ubicación.</td>
+            </tr>
+            <tr>
+                <td><strong>CRM (Ventas y Clientes)</strong></td>
+                <td>Inicio de sesión técnico y antiguo. Imágenes y botones rotos en ventanas emergentes. Pantallas de inicio en blanco.</td>
+                <td><strong>Login corporativo simplificado</strong> (solo Legajo). Corrección visual total en menús e imágenes. Redirección directa al panel de CRM para trabajar sin demoras.</td>
+            </tr>
+            <tr>
+                <td><strong>Hometest (Laboratorio)</strong></td>
+                <td>Riesgo de que cambios técnicos o de seguridad en el servidor interrumpieran la operación real de la compañía.</td>
+                <td><strong>Zona de pruebas segura (Staging)</strong> para validar mejoras operativas y de red sin afectar a los usuarios en vivo.</td>
+            </tr>
+            <tr>
+                <td><strong>Bank (Finanzas)</strong></td>
+                <td>Bucles infinitos al loguearse con la cuenta de Microsoft y posibles lentitudes en consultas de saldos.</td>
+                <td><strong>Ingreso transaccional seguro a la primera</strong> y optimización de velocidad de transmisión de datos financieros sin interferencias.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="footer">
+        BizGuard Enterprise Security Gateway • Documento Gerencial de Arquitectura y Continuidad de Negocio • Confidencial
+    </div>
+
+</body>
+</html>

@@ -32,13 +32,14 @@ export async function updateConnectorAction(id: string, formData: FormData) {
   const publicHost = formData.get("publicHost") as string;
   const port = parseInt(formData.get("port") as string);
   const bypassAuth = formData.get("bypassAuth") === "on";
-  const connectorType = (formData.get("connectorType") as string || "generic") as 'generic' | 'dynamics-crm' | 'core' | 'bank';
+  const connectorType = (formData.get("connectorType") as string || "generic") as 'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test';
   // Para dynamics-crm, isNtlm siempre true aunque el hidden field diga "on"
   const isNtlm = connectorType === 'dynamics-crm' || formData.get("isNtlm") === "on";
   const ntlmDomain = (formData.get("ntlmDomain") as string || "").trim() || undefined;
   const entryPath = (formData.get("entryPath") as string || "").trim() || undefined;
+  const debugLog = formData.get("debugLog") === "on";
 
-  const updated = await updateConnector(id, { name, description, targetUrl, publicHost, port, bypassAuth, connectorType, isNtlm, ntlmDomain, entryPath });
+  const updated = await updateConnector(id, { name, description, targetUrl, publicHost, port, bypassAuth, connectorType, isNtlm, ntlmDomain, entryPath, debugLog });
   
   if (updated) {
     // Reiniciar el conector con la nueva configuración

@@ -19,7 +19,6 @@ export class SerenaTestRules extends BaseRules {
                   req.headers['accept']?.includes('json') || 
                   req.headers['content-type']?.includes('multipart/form-data');
     
-    const isPostLike = req.method !== 'GET' && req.method !== 'HEAD';
     
     // Para Serena-Test, habilitamos HB solo en subidas multipart (pesadas) o navegación estándar larga.
     // Excluimos explícitamente el login de HB para evitar interferencias.
@@ -73,7 +72,7 @@ export class SerenaTestRules extends BaseRules {
     else window.addEventListener('load', checkLogin);
   })();
 </script>`;
-      processedBody = processedBody.replace('</body>', reloadScript + '</body>');
+      processedBody = processedBody.replace(/<\/body>/i, reloadScript + '</body>');
     }
 
     return processedBody;

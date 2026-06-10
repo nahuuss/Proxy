@@ -1,0 +1,9 @@
+{
+  "name": "word-generator",
+  "version": "1.0.0",
+  "description": "Generador de reportes Word para BizGuard",
+  "main": "generator.js",
+  "dependencies": {
+    "docx": "^8.5.0"
+  }
+}

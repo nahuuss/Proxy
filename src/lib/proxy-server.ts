@@ -3,16 +3,19 @@ import https from "https";
 import crypto from "crypto";
 import httpntlm from "httpntlm";
 import zlib from "zlib";
+import { EventEmitter } from "events";
 import { Connector } from "./connectors";
-import { logHB } from "./logger-hb";
+import { logHB, logDebug } from "./logger-hb";
 import { applyDeepRewrite, serveAsBlobDownload, renderBgJobPage, rewriteHeaders } from "./proxy-utils";
 import { getRulesFor } from "./rules";
 
 export type MetricCallback = (id: string, bytes: number, latency?: number) => void;
 
 // Configuración Heartbeat Shield (anti Cloudflare 524)
-const HB_FIRST_PULSE_MS = 45000;  // 45s = margen para cargas pesadas antes de latidos
-const HB_INTERVAL_MS = 15000;     // Enviar espacio cada 15s para mantener viva la conexión
+const HB_FIRST_PULSE_MS = 10000;  // 10s = umbral de activación del shield
+const HB_INTERVAL_MS = 15000;     // Intervalo de keepalive (TCP o body spaces para full-page nav)
+// Para XHR/AJAX, el HB usa TCP keepalive en lugar de escribir espacios al body HTTP.
+// Escribir espacios al body de un XHR rompe el JSON que el cliente intenta parsear.
 
 // Límite de tamaño de body en requests entrantes (protección contra OOM).
 const MAX_BODY_BYTES = parseInt(process.env.MAX_REQUEST_BODY_MB || '500') * 1024 * 1024;
@@ -42,15 +45,54 @@ setInterval(() => {
 export function createProxyServer(connector: Connector, onMetric: MetricCallback) {
   const targetUrl = new URL(connector.targetUrl);
   const isHttps = targetUrl.protocol === "https:";
+  const statusEvents = new EventEmitter();
+  statusEvents.setMaxListeners(200);
   const agent = isHttps
     ? new https.Agent({ keepAlive: true, rejectUnauthorized: connector.strictTls === true })
     : new http.Agent({ keepAlive: true });
 
   const server = http.createServer((req, res) => {
     const startTime = Date.now();
+    const emitStatus = (event: Record<string, unknown>) => {
+      statusEvents.emit("status", {
+        connectorId: connector.id,
+        at: Date.now(),
+        ...event,
+      });
+    };
 
     // ── Background Job API (/__bizguard_job/{id}/status|result) ──────────────
     const rawUrlPath = (req.url || '').split('?')[0].toLowerCase();
+    if (rawUrlPath === '/__bizguard_status/stream') {
+      let streamClientId = "";
+      try {
+        const statusUrl = new URL(req.url || '/', 'http://bizguard.local');
+        streamClientId = (statusUrl.searchParams.get('clientId') || '').slice(0, 80);
+      } catch {}
+
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      });
+      res.write(': open\n\n');
+
+      const onStatus = (event: Record<string, unknown>) => {
+        if (streamClientId && event.clientId && event.clientId !== streamClientId) return;
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      };
+      const heartbeat = setInterval(() => {
+        if (!res.destroyed) res.write(': heartbeat\n\n');
+      }, 15000);
+
+      statusEvents.on("status", onStatus);
+      req.on('close', () => {
+        clearInterval(heartbeat);
+        statusEvents.off("status", onStatus);
+      });
+      return;
+    }
+
     if (rawUrlPath.startsWith('/__bizguard_job/')) {
       const parts = rawUrlPath.replace('/__bizguard_job/', '').split('/');
       const jobId = parts[0];
@@ -88,9 +130,13 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
     }
 
     const headers = { ...req.headers };
+    const bizguardClientId = String(headers['x-bizguard-client-id'] || '').slice(0, 80);
+    const bizguardRequestId = String(headers['x-bizguard-request-id'] || '').slice(0, 80);
     Object.keys(headers).forEach(h => {
       if (h.startsWith('cf-') || h.startsWith('x-forwarded-')) delete headers[h];
     });
+    delete headers['x-bizguard-client-id'];
+    delete headers['x-bizguard-request-id'];
 
     const incomingHost = req.headers.host || connector.publicHost;
     const isInternalAuth = connector.id === "internal-dashboard";
@@ -120,6 +166,7 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
     let hbTimer: NodeJS.Timeout | null = null;
     let hbInterval: NodeJS.Timeout | null = null;
     let hbStart: number | null = null;
+    let heartbeatEndEmitted = false;
 
     const urlPart = (req.url || '').split('?')[0].toLowerCase();
     const rules = getRulesFor(connector.connectorType);
@@ -133,6 +180,38 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
     const isPostLike = req.method !== 'GET' && req.method !== 'HEAD';
     const hbEligible = !isInternalConnector && rules.isHbEligible(req, urlPart, isStatic, isImage);
     const path = (req.url || '').split('?')[0];
+
+    // Debug log de inicio de request
+    logDebug(connector.id, connector.debugLog, {
+      tag: '[REQUEST-IN]',
+      method: req.method,
+      path,
+      extra: `XHR=${!!req.headers['x-requested-with']} hbEligible=${hbEligible}`,
+    });
+
+    const emitHeartbeatEnd = (status?: number, failed = false) => {
+      if (!isHeartbeatActive || heartbeatEndEmitted) return;
+      heartbeatEndEmitted = true;
+      emitStatus({
+        type: "heartbeat-end",
+        clientId: bizguardClientId,
+        requestId: bizguardRequestId,
+        method: req.method || "GET",
+        path,
+        elapsedMs: Date.now() - startTime,
+        status,
+        failed,
+      });
+    };
+
+    res.once('close', () => {
+      if (hbTimer) clearTimeout(hbTimer);
+      if (hbInterval) clearInterval(hbInterval);
+      if (isHeartbeatActive && global.proxyManager) {
+        global.proxyManager.heartbeatCount = Math.max(0, global.proxyManager.heartbeatCount - 1);
+      }
+      emitHeartbeatEnd(undefined, res.destroyed && !res.writableEnded);
+    });
 
     const startHbShield = () => {
       if (!hbEligible || isHeartbeatActive || res.headersSent) return;
@@ -165,36 +244,71 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
           isHeartbeatActive = true;
           hbStart = Date.now() - (HB_FIRST_PULSE_MS); 
           if (global.proxyManager) global.proxyManager.heartbeatCount++;
+          emitStatus({
+            type: "heartbeat-start",
+            clientId: bizguardClientId,
+            requestId: bizguardRequestId,
+            method: req.method || "GET",
+            path,
+            elapsedMs: Date.now() - startTime,
+          });
 
           if (req.method === 'GET' || isPostLike) {
-            logHB(`[HB-SHIELD] Pasivo (Spaces) ${path} | Iniciado tras ${Math.round((Date.now()-startTime)/1000)}s (${connector.id})`);
             const isFullPageNav = !req.headers['x-requested-with'];
-
-            res.writeHead(200, { 
-              'Content-Type': isFullPageNav ? 'text/html; charset=utf-8' : (isPostLike ? 'application/json; charset=utf-8' : 'text/html; charset=utf-8'), 
-              'Transfer-Encoding': 'chunked' 
-            });
             
-            // Enviamos el spinner visual en navegaciones reales (GET o POST que no sean XHR).
-            // Si es un XHR o subida pesada pero sin navegación, enviamos solo un espacio.
             if (isFullPageNav) {
+              // ── FULL-PAGE NAVIGATION ────────────────────────────────────────
+              // Navegación real: escribimos spinner HTML y mantenemos vivo con espacios.
+              // Los espacios van dentro de un comentario HTML (<!-- ... -->),
+              // por lo que no afectan el parse del HTML final.
+              logHB(`[HB-SHIELD] Pasivo (Spaces/HTML) ${path} | Iniciado tras ${Math.round((Date.now()-startTime)/1000)}s (${connector.id})`);
               isHtmlCommentOpen = true;
+              res.writeHead(200, { 
+                'Content-Type': 'text/html; charset=utf-8', 
+                'Transfer-Encoding': 'chunked' 
+              });
               const hbInitSec = Math.round((Date.now() - startTime) / 1000);
               const m = Math.floor(hbInitSec/60), s = hbInitSec%60;
               const hbInitLabel = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
               res.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#f1f5f9;min-height:100vh;display:flex;align-items:center;justify-content:center}.modal{background:#fff;border-radius:16px;padding:40px 48px;box-shadow:0 8px 32px rgba(0,0,0,.10);text-align:center;min-width:340px;max-width:480px}.spinner{width:52px;height:52px;border:5px solid #e2e8f0;border-top-color:#2563eb;border-radius:50%;animation:spin .9s linear infinite;margin:0 auto 20px}@keyframes spin{to{transform:rotate(360deg)}}h3{font-size:18px;font-weight:600;color:#1e293b;margin-bottom:8px}.sub{color:#64748b;font-size:14px;margin-bottom:20px}.timer{font-size:36px;font-weight:700;color:#2563eb;font-variant-numeric:tabular-nums;letter-spacing:3px}.tlabel{font-size:11px;color:#94a3b8;margin-top:6px;text-transform:uppercase;letter-spacing:1px}.pbar-wrap{width:100%;background:#e2e8f0;border-radius:99px;height:8px;margin-top:20px;overflow:hidden}.pbar{height:8px;border-radius:99px;background:linear-gradient(90deg,#2563eb,#60a5fa);width:0%;transition:width 0.8s ease}.note{font-size:11px;color:#94a3b8;margin-top:18px;line-height:1.5;border-top:1px solid #e2e8f0;padding-top:14px}</style></head><body><div class="modal" id="m"><div class="spinner"></div><h3>&#9203; Procesando archivo...</h3><p class="sub">Los datos se están procesando en el servidor.</p><div class="timer" id="t">${hbInitLabel}</div><div class="tlabel">Tiempo transcurrido</div><div class="pbar-wrap"><div class="pbar" id="pb"></div></div><div class="note">Esta pantalla es generada por BizGuard como protección contra cortes de conexión.<br>No forma parte de la aplicación.</div></div><script>var _s=${hbInitSec},_p=0,_piv=null,_iv=setInterval(function(){_s++;var m=Math.floor(_s/60),mstr=m<10?'0'+m:m,s=_s%60,sstr=s<10?'0'+s:s;document.getElementById("t").textContent=mstr+":"+sstr;_p=_p+(85-_p)*0.005;document.getElementById("pb").style.width=_p.toFixed(1)+"%";},1000);</script><!--`);
+              hbInterval = setInterval(() => {
+                if (!res.writableEnded && !res.destroyed) {
+                  res.write(' ');
+                  const elapsed = Math.round((Date.now() - startTime) / 1000);
+                  logHB(`[HB-SHIELD] ⏱ ${elapsed}s activa — ${path} (${connector.id})`);
+                } else {
+                  if (hbInterval) clearInterval(hbInterval);
+                }
+              }, HB_INTERVAL_MS);
             } else {
-              res.write(' ');
+              // ── XHR / AJAX / FETCH ──────────────────────────────────────────
+              // NO escribimos al body HTTP. El cliente espera JSON puro.
+              // Usamos TCP socket keepalive para mantener viva la conexión
+              // sin corromper el cuerpo de la respuesta.
+              logHB(`[HB-SHIELD] Pasivo (TCP-KA) ${path} | Iniciado tras ${Math.round((Date.now()-startTime)/1000)}s (${connector.id})`);
+              logDebug(connector.id, connector.debugLog, {
+                tag: '[HB-TCP-KA]',
+                method: req.method,
+                path,
+                elapsedMs: Date.now() - startTime,
+                extra: 'XHR mode — sin espacios en body',
+              });
+              try {
+                // setKeepAlive(true, delay_ms): el kernel envía TCP ACK/keepalive probes
+                // cada `delay_ms` ms, manteniendo vivo el socket ante firewalls/CDN.
+                res.socket?.setKeepAlive(true, HB_INTERVAL_MS);
+              } catch { /* socket puede no soportarlo en todos los entornos */ }
+              hbInterval = setInterval(() => {
+                if (!res.writableEnded && !res.destroyed) {
+                  const elapsed = Math.round((Date.now() - startTime) / 1000);
+                  logHB(`[HB-SHIELD] ⏱ ${elapsed}s activa — ${path} (${connector.id})`);
+                } else {
+                  if (hbInterval) clearInterval(hbInterval);
+                }
+              }, HB_INTERVAL_MS);
+              // No se llama a res.writeHead() aquí: la respuesta HTTP completa
+              // (headers + body) será enviada cuando el backend responda.
             }
-            hbInterval = setInterval(() => {
-              if (!res.writableEnded && !res.destroyed) {
-                res.write(' ');
-                const elapsed = Math.round((Date.now() - startTime) / 1000);
-                logHB(`[HB-SHIELD] ⏱ ${elapsed}s activa — ${path} (${connector.id})`);
-              } else {
-                if (hbInterval) clearInterval(hbInterval);
-              }
-            }, HB_INTERVAL_MS);
           } else {
             logHB(`[HB-SHIELD] Activo (Polling/Job) ${path} tras ${Math.round((Date.now()-startTime)/1000)}s (${connector.id})`);
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -292,8 +406,15 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
 
                 serveAsBlobDownload(res, req, finalBuffer, fwdHeaders, incomingHost, isHtmlCommentOpen);
               } else {
-                if (isHtmlCommentOpen) res.write('-->');
-                res.write(responseBody); res.end();
+                if (res.headersSent) {
+                  // Modo full-page nav: headers ya enviados.
+                  if (isHtmlCommentOpen) res.write('-->');
+                  res.write(responseBody); res.end();
+                } else {
+                  // Modo TCP-KA (XHR): enviamos respuesta normal.
+                  fwdHeaders['content-length'] = String(responseBody.length);
+                  res.writeHead(ntlmRes.statusCode, fwdHeaders); res.end(responseBody);
+                }
               }
             } else {
               fwdHeaders['content-length'] = String(responseBody.length);
@@ -315,7 +436,7 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
       res.on('close', () => {
         if (hbTimer) clearTimeout(hbTimer);
         if (hbInterval) clearInterval(hbInterval);
-        if (isHeartbeatActive && global.proxyManager) global.proxyManager.heartbeatCount = Math.max(0, global.proxyManager.heartbeatCount - 1);
+        emitHeartbeatEnd(undefined, res.destroyed && !res.writableEnded);
       });
     }
 
@@ -415,8 +536,27 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
 
           if (isHeartbeatActive) {
             if (!res.writableEnded) {
-              if (isHtmlCommentOpen) res.write('-->');
-              res.write(buffer); res.end();
+              if (res.headersSent) {
+                // Modo full-page nav: headers ya enviados (spinner HTML abierto).
+                // Cerramos el comentario HTML y adjuntamos el buffer de respuesta.
+                if (isHtmlCommentOpen) res.write('-->');
+                res.write(buffer); res.end();
+              } else {
+                // Modo TCP-KA (XHR): headers NO enviados todavía.
+                // Enviamos respuesta HTTP completa normal con headers del backend.
+                logHB(`[HB-SHIELD] TCP-KA completo — enviando respuesta normal ${path} (${connector.id})`);
+                logDebug(connector.id, connector.debugLog, {
+                  tag: '[HB-TCP-KA-DONE]',
+                  method: req.method,
+                  path,
+                  status: proxyRes.statusCode,
+                  elapsedMs: Date.now() - startTime,
+                  extra: `body=${buffer.length}B`,
+                });
+                finalHeaders['content-length'] = String(buffer.length);
+                res.writeHead(proxyRes.statusCode || 200, finalHeaders);
+                res.end(buffer);
+              }
             }
           } else if (!res.headersSent) {
             res.writeHead(proxyRes.statusCode || 200, finalHeaders);

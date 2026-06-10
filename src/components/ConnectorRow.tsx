@@ -68,6 +68,7 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
   const [isEditing, setIsEditing] = useState(false);
   const [selectedType, setSelectedType] = useState<'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test'>(connector.connectorType || 'generic');
   const [ntlmEnabled, setNtlmEnabled] = useState(connector.isNtlm === true);
+  const [debugLog, setDebugLog] = useState(connector.debugLog === true);
 
   const handleTypeChange = (type: string) => {
     setSelectedType(type as 'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test');
@@ -117,7 +118,7 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
   const [bypassAuth, setBypassAuth] = useState(connector.bypassAuth === true);
 
   const tabs = [
-    { id: 'general' as const,   label: 'General',   badge: null },
+    { id: 'general' as const,   label: 'General',   badge: debugLog ? 'DBG' : null },
     { id: 'producto' as const,  label: 'Producto',  badge: selectedType !== 'generic' ? selectedType === 'dynamics-crm' ? 'CRM' : selectedType.charAt(0).toUpperCase() + selectedType.slice(1) : null },
     { id: 'seguridad' as const, label: 'Seguridad', badge: (bypassAuth || ntlmEnabled) ? '!' : null },
   ];
@@ -169,22 +170,81 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
           {/* Tab content — todos los paneles siempre en el DOM para que los inputs se incluyan en el submit */}
           <div className="overflow-y-auto flex-1">
 
-            <div className={`px-6 py-5 space-y-4 ${activeTab === 'general' ? '' : 'hidden'}`}>
+            <div className={`px-6 py-5 space-y-5 ${activeTab === 'general' ? '' : 'hidden'}`}>
+
+              {/* ── Sección: Identidad ─────────────────────────────────── */}
               <div>
-                <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Nombre</label>
-                <input name="name" defaultValue={connector.name} className="w-full bg-surface-container-lowest border border-transparent text-on-surface text-sm py-3 px-4 rounded-lg focus:border-primary/50 outline-none mt-1" />
-              </div>
-              <div>
-                <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Host Público & Puerto</label>
-                <div className="flex bg-surface-container-lowest rounded-lg overflow-hidden mt-1">
-                  <input name="publicHost" defaultValue={connector.publicHost} className="w-2/3 bg-transparent border-none text-on-surface text-sm py-3 px-4 outline-none border-r border-outline-variant/15" placeholder="app.dominio.com" />
-                  <input name="port" type="number" defaultValue={connector.port} className="w-1/3 bg-transparent border-none text-on-surface text-sm py-3 px-4 outline-none" placeholder="8080" />
+                <p className="font-label text-[9px] font-bold uppercase tracking-[0.15em] text-primary/60 mb-3 flex items-center gap-2">
+                  <span className="flex-1 h-px bg-primary/10"></span>
+                  Identidad
+                  <span className="flex-1 h-px bg-primary/10"></span>
+                </p>
+                <div>
+                  <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Nombre</label>
+                  <input name="name" defaultValue={connector.name} className="w-full bg-surface-container-lowest border border-transparent text-on-surface text-sm py-3 px-4 rounded-lg focus:border-primary/50 outline-none mt-1" />
                 </div>
               </div>
+
+              {/* ── Sección: Red ───────────────────────────────────────── */}
               <div>
-                <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">URL Interna</label>
-                <input name="targetUrl" defaultValue={connector.targetUrl} className="w-full bg-surface-container-lowest border border-transparent text-on-surface text-sm py-3 px-4 rounded-lg focus:border-primary/50 outline-none mt-1" placeholder="http://10.0.0.1:80" />
+                <p className="font-label text-[9px] font-bold uppercase tracking-[0.15em] text-primary/60 mb-3 flex items-center gap-2">
+                  <span className="flex-1 h-px bg-primary/10"></span>
+                  Red
+                  <span className="flex-1 h-px bg-primary/10"></span>
+                </p>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-[1fr_auto] gap-3">
+                    <div>
+                      <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Host Público</label>
+                      <input
+                        name="publicHost"
+                        defaultValue={connector.publicHost}
+                        className="w-full bg-surface-container-lowest border border-outline-variant/15 text-on-surface text-sm py-3 px-4 rounded-lg focus:border-primary/50 outline-none mt-1 transition-colors"
+                        placeholder="app.dominio.com"
+                      />
+                    </div>
+                    <div className="w-28">
+                      <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Puerto</label>
+                      <input
+                        name="port"
+                        type="number"
+                        defaultValue={connector.port}
+                        className="w-full bg-surface-container-lowest border border-outline-variant/15 text-on-surface text-sm py-3 px-4 rounded-lg focus:border-primary/50 outline-none mt-1 tabular-nums text-center transition-colors"
+                        placeholder="8080"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">URL Interna</label>
+                    <input name="targetUrl" defaultValue={connector.targetUrl} className="w-full bg-surface-container-lowest border border-transparent text-on-surface text-sm py-3 px-4 rounded-lg focus:border-primary/50 outline-none mt-1" placeholder="http://10.0.0.1:80" />
+                  </div>
+                </div>
               </div>
+
+              {/* ── Sección: Diagnóstico ────────────────────────────────── */}
+              <div>
+                <p className="font-label text-[9px] font-bold uppercase tracking-[0.15em] text-primary/60 mb-3 flex items-center gap-2">
+                  <span className="flex-1 h-px bg-primary/10"></span>
+                  Diagnóstico
+                  <span className="flex-1 h-px bg-primary/10"></span>
+                </p>
+                <div className="flex items-start gap-4 p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/10">
+                  <svg className="w-5 h-5 text-on-surface-variant shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
+                  </svg>
+                  <div className="flex-1">
+                    <p className="font-label text-xs font-bold text-on-surface uppercase tracking-wide">Debug Log</p>
+                    <p className="font-body text-[10px] text-on-surface-variant mt-0.5">
+                      Escribe un log detallado en <code className="bg-surface-container px-1 rounded font-mono">debug-{connector.id}.log</code> en la raíz del proyecto. Usar solo para diagnóstico.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                    <input type="checkbox" name="debugLog" checked={debugLog} onChange={e => setDebugLog(e.target.checked)} className="sr-only peer" />
+                    <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-tertiary peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
+                  </label>
+                </div>
+              </div>
+
             </div>
 
             <div className={`px-6 py-5 space-y-4 ${activeTab === 'producto' ? '' : 'hidden'}`}>

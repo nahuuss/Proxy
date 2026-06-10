@@ -14,4 +14,7 @@ export class CoreRules extends BaseRules {
   }
 
   // Core usa el redirect script base pero podríamos personalizarlo aquí si fuera necesario
+  override rewriteBody(body: string): string {
+    return body;
+  }
 }

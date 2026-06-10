@@ -17,6 +17,7 @@ export interface Connector {
   isNtlm?: boolean;
   ntlmDomain?: string;
   entryPath?: string;
+  debugLog?: boolean; // Si true, escribe un log detallado en /debug-{id}.log en raíz del proyecto
   stats?: {
     requests: number;
     bytes: number;
