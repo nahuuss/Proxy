@@ -6,7 +6,7 @@ import net from "net";
 import tls from "tls";
 import os from "os";
 import { EventEmitter } from "events";
-import { getSettings } from "./settings";
+import { getSettings, GlobalSettings } from "./settings";
 import { decode } from "@auth/core/jwt";
 import fs from "fs";
 import path from "path";
@@ -79,7 +79,7 @@ const rateLimiter = new RateLimiter();
 
 class ProxyManager extends EventEmitter {
   private servers: Map<number, http.Server> = new Map();
-  private proxyServers: Map<string, ReturnType<typeof createProxyServer>> = new Map();
+  private proxyServers: Map<string, { server: ReturnType<typeof createProxyServer>; connector: Connector }> = new Map();
   private stats: Map<string, { requests: number, bytes: number, latency?: number, activePing?: number, isOnline?: boolean }> = new Map();
   private pingStats: Record<string, number> = {};
   private statsPending = false;
@@ -363,7 +363,7 @@ class ProxyManager extends EventEmitter {
       if (url.startsWith("/api/auth") || url.startsWith("/api/stats") || url.startsWith("/login") || url.includes("_next") || url.includes("favicon")) {
         const DASH_ID = "internal-dashboard";
         if (!this.proxyServers.has(DASH_ID)) {
-          this.proxyServers.set(DASH_ID, createProxyServer({
+          const dashConnector = {
             id: DASH_ID,
             name: "Internal BizGuard Dashboard",
             description: "Maneja autenticación y recursos estáticos internamente",
@@ -371,9 +371,13 @@ class ProxyManager extends EventEmitter {
             targetUrl: "http://127.0.0.1:3000",
             publicHost: hostHeader,
             isActive: true
-          }, () => {}));
+          };
+          this.proxyServers.set(DASH_ID, {
+            server: createProxyServer(dashConnector, () => {}, 20000),
+            connector: dashConnector
+          });
         }
-        (this.proxyServers.get(DASH_ID) as any).emit("request", req, res);
+        (this.proxyServers.get(DASH_ID)!.server as any).emit("request", req, res);
         return;
       }
 
@@ -471,7 +475,7 @@ class ProxyManager extends EventEmitter {
         return;
       }
 
-      this.handleRequest(connector, req, res, (req as any).session);
+      this.handleRequest(connector, req, res, (req as any).session, settings);
     });
 
     server.on('error', (e: any) => {
@@ -584,7 +588,7 @@ class ProxyManager extends EventEmitter {
     this.servers.set(port, server);
   }
 
-  private handleRequest(connector: Connector, req: http.IncomingMessage, res: http.ServerResponse, _session?: any) {
+  private handleRequest(connector: Connector, req: http.IncomingMessage, res: http.ServerResponse, _session: any, settings: GlobalSettings) {
     if (!this.stats.has(connector.id)) {
       this.stats.set(connector.id, { requests: 0, bytes: 0, latency: 0 });
     }
@@ -596,16 +600,45 @@ class ProxyManager extends EventEmitter {
     try {
       // Reusar el mismo proxy server (y su http.Agent keepAlive) por conector.
       // Crear uno nuevo por request acumula agentes con sockets abiertos → OOM.
-      if (!this.proxyServers.has(connector.id)) {
-        this.proxyServers.set(connector.id, createProxyServer(connector, (id, bytes, latency) => {
+      // Calcular el umbral de heartbeat (conector -> global settings -> fallback 20s)
+      const resolvedFirstPulseSec = connector.hbFirstPulse !== undefined && connector.hbFirstPulse > 0
+        ? connector.hbFirstPulse
+        : settings.hbFirstPulse !== undefined && settings.hbFirstPulse > 0
+          ? settings.hbFirstPulse
+          : 20;
+      const hbFirstPulseMs = resolvedFirstPulseSec * 1000;
+
+      // Si la configuración crítica del conector cambió (e.g. se activó HAR log o cambió el umbral), recreamos en caliente.
+      const cached = this.proxyServers.get(connector.id);
+      const hasChanged = cached && (
+        cached.connector.targetUrl !== connector.targetUrl ||
+        cached.connector.publicHost !== connector.publicHost ||
+        cached.connector.port !== connector.port ||
+        cached.connector.bypassAuth !== connector.bypassAuth ||
+        cached.connector.strictTls !== connector.strictTls ||
+        cached.connector.connectorType !== connector.connectorType ||
+        cached.connector.isNtlm !== connector.isNtlm ||
+        cached.connector.ntlmDomain !== connector.ntlmDomain ||
+        cached.connector.entryPath !== connector.entryPath ||
+        cached.connector.harLog !== connector.harLog ||
+        cached.connector.trafficLog !== connector.trafficLog ||
+        cached.connector.hbFirstPulse !== connector.hbFirstPulse
+      );
+
+      if (!cached || hasChanged) {
+        if (cached) {
+          this.log(`[BIZGUARD] Configuración de ${connector.id} cambió. Recreando proxy server.`, "system");
+        }
+        const server = createProxyServer(connector, (id, bytes, latency) => {
           const current = this.stats.get(id) || { requests: 0, bytes: 0, latency: 0 };
           if (bytes > 0) current.bytes += bytes;
           if (latency !== undefined) current.latency = latency;
           this.stats.set(id, { ...current });
           this.statsPending = true;
-        }));
+        }, hbFirstPulseMs);
+        this.proxyServers.set(connector.id, { server, connector });
       }
-      const proxyServer = this.proxyServers.get(connector.id)!;
+      const proxyServer = this.proxyServers.get(connector.id)!.server;
 
       this.log(`[BIZGUARD-IN] ${req.method} ${req.url} -> ${connector.id}`, "info");
       (proxyServer as any).emit('request', req, res);

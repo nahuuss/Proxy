@@ -1,1 +1,1 @@
-{"stats":{"__pings":{"region2.argotunnel":5,"api.cloudflare.com":26,"update.argotunnel":32,"region1.argotunnel":48},"__metrics":{"throughput":0,"cpuLoad":21.857285761920643,"memUsage":49.04755247049452,"activeHeartbeats":0}},"logs":[]}
+{"stats":{"__pings":{"region2.argotunnel":6,"update.argotunnel":5,"api.cloudflare.com":23,"region1.argotunnel":47},"__metrics":{"throughput":0,"cpuLoad":34.22841040941489,"memUsage":32.1570563268632,"activeHeartbeats":0}},"logs":[]}

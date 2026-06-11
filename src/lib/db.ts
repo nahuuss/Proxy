@@ -22,10 +22,20 @@ declare global {
   var settingsDb: Datastore<any> | undefined;
 }
 
+// Determinar de forma robusta si estamos en fase de compilación (next build o workers)
+export function isBuildPhase(): boolean {
+  if (process.env.npm_lifecycle_event === 'build') return true;
+  if (process.env.NEXT_PHASE === 'phase-production-build') return true;
+  if (typeof process !== 'undefined' && process.argv) {
+    if (process.argv.some(arg => arg.includes('build') || arg.includes('next-build'))) return true;
+  }
+  return false;
+}
+
 // Función utilitaria para cargar base de datos con reintentos
 async function loadWithRetry(db: Datastore<any>, name: string, retries = 3, delay = 500) {
   // Evitar cargar NeDB y generar archivos .db~ durante la etapa de compilación
-  if (process.env.npm_lifecycle_event === 'build') {
+  if (isBuildPhase()) {
     console.log(`[NeDB] Skipped loading ${name} during Next.js build phase.`);
     return;
   }

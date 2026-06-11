@@ -8,11 +8,41 @@ import { Server, Settings2, Pause, Play, Activity, X, Save, ExternalLink, Shield
 import { useStats } from "@/contexts/StatsContext";
 
 const CONNECTOR_TYPES = [
-  { value: 'generic',       label: 'Genérico',          icon: '🔗', desc: 'Proxy HTTP/HTTPS estándar. Sin customizaciones específicas.' },
-  { value: 'dynamics-crm',  label: 'Dynamics CRM',      icon: '📊', desc: 'Microsoft Dynamics CRM on-premise. Habilita NTLM, reescritura de URLs y ruta de organización.' },
-  { value: 'core',          label: 'Core',               icon: '🏦', desc: 'Sistema Core bancario. Customizaciones específicas para este producto.' },
-  { value: 'bank',          label: 'Bank',               icon: '💳', desc: 'Portal bancario. Customizaciones específicas para este producto.' },
-  { value: 'serena-test',   label: 'Serena Test',        icon: '🧪', desc: 'Entorno de pruebas y staging para customizaciones experimentales.' },
+  { 
+    value: 'generic',       
+    label: 'Genérico',          
+    icon: '🔗', 
+    desc: 'Proxy HTTP/HTTPS estándar. Sin customizaciones específicas.',
+    tooltip: 'Solo activa el Heartbeat para navegaciones GET tradicionales (excluye POST y AJAX/XHR). Sin reescritura de respuesta.'
+  },
+  { 
+    value: 'dynamics-crm',  
+    label: 'Dynamics CRM',      
+    icon: '📊', 
+    desc: 'Microsoft Dynamics CRM on-premise. Habilita NTLM y reescrituras.',
+    tooltip: 'Mismas reglas de Heartbeat que el Genérico (solo GET), habilitando además handshake de autenticación integrada NTLM.'
+  },
+  { 
+    value: 'core',          
+    label: 'Core',               
+    icon: '🏦', 
+    desc: 'Sistema Core bancario. Heartbeat habilitado en POST/uploads.',
+    tooltip: 'Habilita Heartbeat Shield ampliado para peticiones POST (especialmente subidas multipart/form-data largas). Excluye AJAX ordinarios.'
+  },
+  { 
+    value: 'bank',          
+    label: 'BANK', 
+    icon: '💳', 
+    desc: 'Portal bancario. Autocorrección de peticiones AJAX.',
+    tooltip: 'Mismas reglas que el Genérico (solo GET). Incluye reescritura en caliente para corregir errores de llamadas AJAX que usan type: "Json" incorrectamente.'
+  },
+  { 
+    value: 'serena-test',   
+    label: 'Serena Test',        
+    icon: '🧪', 
+    desc: 'Entorno de staging y pruebas custom. Reglas de DNN.',
+    tooltip: 'Heartbeat para GET y POST selectivo (excluye login). Desactiva HB en AJAX Delta. Limpia rutas Portals de DNN e inyecta auto-reload al autenticarse.'
+  },
 ] as const;
 
 function ConnectorTypeSection({ connectorType, onChange }: { connectorType?: string; onChange?: (type: string) => void }) {
@@ -22,7 +52,7 @@ function ConnectorTypeSection({ connectorType, onChange }: { connectorType?: str
       <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Tipo de producto</label>
       <div className="grid grid-cols-2 gap-2 mt-2">
         {CONNECTOR_TYPES.map(t => (
-          <label key={t.value} className="relative cursor-pointer">
+          <label key={t.value} className="relative cursor-pointer" title={t.tooltip}>
             <input type="radio" name="connectorType" value={t.value} checked={current === t.value} onChange={() => onChange?.(t.value)} className="sr-only peer" />
             <div className="p-3 rounded-lg border border-outline-variant/20 bg-surface-container-lowest peer-checked:border-primary/60 peer-checked:bg-primary/5 transition-all">
               <div className="flex items-center gap-2">
@@ -68,7 +98,11 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
   const [isEditing, setIsEditing] = useState(false);
   const [selectedType, setSelectedType] = useState<'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test'>(connector.connectorType || 'generic');
   const [ntlmEnabled, setNtlmEnabled] = useState(connector.isNtlm === true);
-  const [debugLog, setDebugLog] = useState(connector.debugLog === true);
+  const [harLog, setHarLog] = useState(connector.harLog === true);
+  const [trafficLog, setTrafficLog] = useState(connector.trafficLog === true);
+  const [hbFirstPulse, setHbFirstPulse] = useState(connector.hbFirstPulse !== undefined ? String(connector.hbFirstPulse) : "");
+  const [trafficRetentionValue, setTrafficRetentionValue] = useState(connector.trafficRetentionValue !== undefined ? String(connector.trafficRetentionValue) : "");
+  const [trafficRetentionUnit, setTrafficRetentionUnit] = useState(connector.trafficRetentionUnit || "hours");
 
   const handleTypeChange = (type: string) => {
     setSelectedType(type as 'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test');
@@ -114,13 +148,14 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
   const statusColor = isPaused ? "bg-outline-variant text-on-surface-variant" : (isDown ? "bg-error text-error" : (isChecking ? "bg-tertiary text-on-tertiary" : "bg-secondary text-secondary"));
   const statusText = isPaused ? "Standby" : (isDown ? "Offline" : (isChecking ? "Checking" : "Healthy"));
 
-  const [activeTab, setActiveTab] = useState<'general' | 'producto' | 'seguridad'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'producto' | 'seguridad' | 'diagnostico'>('general');
   const [bypassAuth, setBypassAuth] = useState(connector.bypassAuth === true);
 
   const tabs = [
-    { id: 'general' as const,   label: 'General',   badge: debugLog ? 'DBG' : null },
-    { id: 'producto' as const,  label: 'Producto',  badge: selectedType !== 'generic' ? selectedType === 'dynamics-crm' ? 'CRM' : selectedType.charAt(0).toUpperCase() + selectedType.slice(1) : null },
-    { id: 'seguridad' as const, label: 'Seguridad', badge: (bypassAuth || ntlmEnabled) ? '!' : null },
+    { id: 'general' as const,     label: 'General',   badge: null },
+    { id: 'producto' as const,    label: 'Producto',  badge: selectedType !== 'generic' ? selectedType === 'dynamics-crm' ? 'CRM' : selectedType.charAt(0).toUpperCase() + selectedType.slice(1) : null },
+    { id: 'seguridad' as const,   label: 'Seguridad', badge: (bypassAuth || ntlmEnabled) ? '!' : null },
+    { id: 'diagnostico' as const, label: 'Diagnóstico', badge: trafficLog ? 'TRF' : harLog ? 'HAR' : null },
   ];
 
   const editModal = isEditing ? createPortal(
@@ -193,7 +228,7 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
                   <span className="flex-1 h-px bg-primary/10"></span>
                 </p>
                 <div className="space-y-3">
-                  <div className="grid grid-cols-[1fr_auto] gap-3">
+                  <div className="grid grid-cols-[1fr_148px] gap-5">
                     <div>
                       <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Host Público</label>
                       <input
@@ -203,13 +238,13 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
                         placeholder="app.dominio.com"
                       />
                     </div>
-                    <div className="w-28">
-                      <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Puerto</label>
+                    <div>
+                      <label className="font-label text-[10px] font-bold uppercase tracking-widest text-primary/80">Puerto Proxy</label>
                       <input
                         name="port"
                         type="number"
                         defaultValue={connector.port}
-                        className="w-full bg-surface-container-lowest border border-outline-variant/15 text-on-surface text-sm py-3 px-4 rounded-lg focus:border-primary/50 outline-none mt-1 tabular-nums text-center transition-colors"
+                        className="w-full bg-surface-container-lowest border border-primary/20 text-on-surface text-sm py-3 px-4 rounded-lg focus:border-primary/50 outline-none mt-1 tabular-nums text-center font-mono transition-colors"
                         placeholder="8080"
                       />
                     </div>
@@ -218,30 +253,6 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
                     <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">URL Interna</label>
                     <input name="targetUrl" defaultValue={connector.targetUrl} className="w-full bg-surface-container-lowest border border-transparent text-on-surface text-sm py-3 px-4 rounded-lg focus:border-primary/50 outline-none mt-1" placeholder="http://10.0.0.1:80" />
                   </div>
-                </div>
-              </div>
-
-              {/* ── Sección: Diagnóstico ────────────────────────────────── */}
-              <div>
-                <p className="font-label text-[9px] font-bold uppercase tracking-[0.15em] text-primary/60 mb-3 flex items-center gap-2">
-                  <span className="flex-1 h-px bg-primary/10"></span>
-                  Diagnóstico
-                  <span className="flex-1 h-px bg-primary/10"></span>
-                </p>
-                <div className="flex items-start gap-4 p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/10">
-                  <svg className="w-5 h-5 text-on-surface-variant shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
-                  </svg>
-                  <div className="flex-1">
-                    <p className="font-label text-xs font-bold text-on-surface uppercase tracking-wide">Debug Log</p>
-                    <p className="font-body text-[10px] text-on-surface-variant mt-0.5">
-                      Escribe un log detallado en <code className="bg-surface-container px-1 rounded font-mono">debug-{connector.id}.log</code> en la raíz del proyecto. Usar solo para diagnóstico.
-                    </p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
-                    <input type="checkbox" name="debugLog" checked={debugLog} onChange={e => setDebugLog(e.target.checked)} className="sr-only peer" />
-                    <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-tertiary peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
-                  </label>
                 </div>
               </div>
 
@@ -273,6 +284,109 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
               </div>
               {/* NTLM */}
               <DynamicsCrmSection ntlmEnabled={ntlmEnabled} onNtlmChange={setNtlmEnabled} ntlmDomain={connector.ntlmDomain} />
+            </div>
+
+            <div className={`px-6 py-5 space-y-5 ${activeTab === 'diagnostico' ? '' : 'hidden'}`}>
+              <div>
+                <p className="font-label text-[9px] font-bold uppercase tracking-[0.15em] text-primary/60 mb-3 flex items-center gap-2">
+                  <span className="flex-1 h-px bg-primary/10"></span>
+                  Diagnóstico y Logs
+                  <span className="flex-1 h-px bg-primary/10"></span>
+                </p>
+                <div className="space-y-3">
+                  {/* Debug HAR */}
+                  <div className="flex items-start gap-4 p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/10">
+                    <svg className="w-5 h-5 text-on-surface-variant shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                      <line x1="8" y1="21" x2="16" y2="21" />
+                      <line x1="12" y1="17" x2="12" y2="21" />
+                    </svg>
+                    <div className="flex-1">
+                      <p className="font-label text-xs font-bold text-on-surface uppercase tracking-wide">Debug HAR</p>
+                      <p className="font-body text-[10px] text-on-surface-variant mt-0.5">
+                        Escribe un log HAR completo en <code className="bg-surface-container px-1 rounded font-mono">logs/har-{connector.id}.jsonl</code> para capturar errores de tráfico HTTP.
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                      <input type="checkbox" name="harLog" checked={harLog} onChange={e => setHarLog(e.target.checked)} className="sr-only peer" />
+                      <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-secondary peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
+                    </label>
+                  </div>
+
+                  {/* Log de Tráfico */}
+                  <div className="flex items-start gap-4 p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/10">
+                    <svg className="w-5 h-5 text-on-surface-variant shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                    <div className="flex-1">
+                      <p className="font-label text-xs font-bold text-on-surface uppercase tracking-wide">Log de Tráfico y Diagnóstico</p>
+                      <p className="font-body text-[10px] text-on-surface-variant mt-0.5">
+                        Log de tráfico y trazas de diagnóstico agrupadas por conector en <code className="bg-surface-container px-1 rounded font-mono">logs/traffic/</code>. Rotación de 100 MB y retención configurable. Incluye cookies, headers y eventos.
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                      <input type="checkbox" name="trafficLog" checked={trafficLog} onChange={e => setTrafficLog(e.target.checked)} className="sr-only peer" />
+                      <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-primary peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
+                    </label>
+                  </div>
+
+                  {/* Tiempo de Retención */}
+                  <div className="flex items-start gap-4 p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/10">
+                    <div className="flex-1">
+                      <p className="font-label text-xs font-bold text-on-surface uppercase tracking-wide">Tiempo de Retención de Logs</p>
+                      <p className="font-body text-[10px] text-on-surface-variant mt-0.5">
+                        Especifica durante cuánto tiempo se almacenarán los logs de tráfico antes de eliminarse automáticamente. Deja vacío para usar el valor por defecto (5 horas).
+                      </p>
+                    </div>
+                    <div className="flex gap-2 shrink-0 mt-0.5 w-[200px]">
+                      <input 
+                        type="number"
+                        name="trafficRetentionValue"
+                        min="1"
+                        value={trafficRetentionValue}
+                        onChange={e => setTrafficRetentionValue(e.target.value)}
+                        className="w-1/2 bg-surface-container-low border border-outline-variant/30 text-on-surface text-sm py-2 px-3 rounded-lg focus:border-primary/50 outline-none font-mono text-center"
+                        placeholder="5"
+                      />
+                      <select
+                        name="trafficRetentionUnit"
+                        value={trafficRetentionUnit}
+                        onChange={e => setTrafficRetentionUnit(e.target.value as any)}
+                        className="w-1/2 bg-surface-container-low border border-outline-variant/30 text-on-surface text-sm py-2 px-3 rounded-lg focus:border-primary/50 outline-none text-center"
+                      >
+                        <option value="seconds">Segundos</option>
+                        <option value="minutes">Minutos</option>
+                        <option value="hours">Horas</option>
+                        <option value="days">Días</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Heartbeat Threshold Override */}
+                  <div className="flex items-start gap-4 p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/10">
+                    <div className="flex-1">
+                      <p className="font-label text-xs font-bold text-on-surface uppercase tracking-wide">Umbral de Heartbeat (Segundos)</p>
+                      <p className="font-body text-[10px] text-on-surface-variant mt-0.5">
+                        Tiempo de espera antes de activar el Heartbeat Shield para mantener la conexión viva. Deja vacío para usar el valor global por defecto (20s).
+                      </p>
+                    </div>
+                    <div className="w-24 shrink-0 mt-0.5">
+                      <input 
+                        type="number"
+                        name="hbFirstPulse"
+                        min="1"
+                        value={hbFirstPulse}
+                        onChange={e => setHbFirstPulse(e.target.value)}
+                        className="w-full bg-surface-container-low border border-outline-variant/30 text-on-surface text-sm py-2 px-3 rounded-lg focus:border-primary/50 outline-none font-mono text-center"
+                        placeholder="20"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
           </div>
@@ -345,6 +459,9 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
             <span className={`text-[8.5px] font-bold ${statusColor.split(' ')[1]} uppercase tracking-tighter`}>{statusText}</span>
             {connector.bypassAuth && (
               <span className="text-[8px] font-bold text-error uppercase tracking-tighter ml-1" title="SSO Bypass activo">NO-SSO</span>
+            )}
+            {connector.harLog && (
+              <span className="text-[8px] font-bold text-secondary uppercase tracking-tighter ml-1 bg-secondary/15 px-1 rounded" title="HAR Debug Activo">HAR</span>
             )}
           </div>
         </div>

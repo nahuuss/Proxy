@@ -1,6 +1,6 @@
 # Script de Preparacion de Paquete Offline (Power-Pack BizGuard ENTERPRISE)
-# Correr en Windows PowerShell
-
+# Correr en Windows PowerShell powershell.exe -ExecutionPolicy Bypass -File "E:\Desarrollo\BizGuard\preparar-despliegue.ps1"
+#powershell.exe -ExecutionPolicy Bypass -File "E:\Desarrollo\BizGuard\preparar-despliegue.ps1"
 $scriptRoot = if ($PSScriptRoot) {
     $PSScriptRoot
 } else {

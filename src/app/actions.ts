@@ -1,8 +1,9 @@
 "use server"
 
-import { addConnector, updateConnector, getConnectorById, deleteConnector } from "@/lib/connectors";
+import { addConnector, updateConnector, getConnectorById, deleteConnector, getConnectors } from "@/lib/connectors";
 import { revalidatePath } from "next/cache";
 import { proxyManager } from "@/lib/proxy-manager";
+import net from "net";
 
 export async function createConnectorAction(prevState: any, formData: FormData) {
   try {
@@ -13,7 +14,37 @@ export async function createConnectorAction(prevState: any, formData: FormData) 
     const port = parseInt(formData.get("port") as string);
     const id = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
-    const newConnector = await addConnector({ id, name, description, targetUrl, publicHost, port });
+    const bypassAuth = formData.get("bypassAuth") === "on";
+    const connectorType = (formData.get("connectorType") as string || "generic") as 'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test';
+    const isNtlm = connectorType === 'dynamics-crm' || formData.get("isNtlm") === "on";
+    const ntlmDomain = (formData.get("ntlmDomain") as string || "").trim() || undefined;
+    const entryPath = (formData.get("entryPath") as string || "").trim() || undefined;
+    const harLog = formData.get("harLog") === "on";
+    const trafficLog = formData.get("trafficLog") === "on";
+    const hbFirstPulseStr = formData.get("hbFirstPulse") as string;
+    const hbFirstPulse = hbFirstPulseStr ? parseInt(hbFirstPulseStr) : undefined;
+    const trafficRetentionValueStr = formData.get("trafficRetentionValue") as string;
+    const trafficRetentionValue = trafficRetentionValueStr ? parseInt(trafficRetentionValueStr) : undefined;
+    const trafficRetentionUnit = (formData.get("trafficRetentionUnit") as string || "hours") as 'seconds' | 'minutes' | 'hours' | 'days';
+
+    const newConnector = await addConnector({ 
+      id, 
+      name, 
+      description, 
+      targetUrl, 
+      publicHost, 
+      port,
+      bypassAuth,
+      connectorType,
+      isNtlm,
+      ntlmDomain,
+      entryPath,
+      harLog,
+      trafficLog,
+      hbFirstPulse,
+      trafficRetentionValue,
+      trafficRetentionUnit
+    });
     
     // Levantar el puerto inmediatamente
     proxyManager.startConnector(newConnector);
@@ -37,9 +68,15 @@ export async function updateConnectorAction(id: string, formData: FormData) {
   const isNtlm = connectorType === 'dynamics-crm' || formData.get("isNtlm") === "on";
   const ntlmDomain = (formData.get("ntlmDomain") as string || "").trim() || undefined;
   const entryPath = (formData.get("entryPath") as string || "").trim() || undefined;
-  const debugLog = formData.get("debugLog") === "on";
+  const harLog = formData.get("harLog") === "on";
+  const trafficLog = formData.get("trafficLog") === "on";
+  const hbFirstPulseStr = formData.get("hbFirstPulse") as string;
+  const hbFirstPulse = hbFirstPulseStr ? parseInt(hbFirstPulseStr) : undefined;
+  const trafficRetentionValueStr = formData.get("trafficRetentionValue") as string;
+  const trafficRetentionValue = trafficRetentionValueStr ? parseInt(trafficRetentionValueStr) : undefined;
+  const trafficRetentionUnit = (formData.get("trafficRetentionUnit") as string || "hours") as 'seconds' | 'minutes' | 'hours' | 'days';
 
-  const updated = await updateConnector(id, { name, description, targetUrl, publicHost, port, bypassAuth, connectorType, isNtlm, ntlmDomain, entryPath, debugLog });
+  const updated = await updateConnector(id, { name, description, targetUrl, publicHost, port, bypassAuth, connectorType, isNtlm, ntlmDomain, entryPath, harLog, trafficLog, hbFirstPulse, trafficRetentionValue, trafficRetentionUnit });
   
   if (updated) {
     // Reiniciar el conector con la nueva configuración
@@ -68,3 +105,31 @@ export async function toggleConnectorAction(id: string) {
   
   revalidatePath("/");
 }
+
+export async function checkPortAction(port: number): Promise<{ occupied: boolean; reason?: 'configured' | 'system' }> {
+  try {
+    // 1. Verificar si ya está configurado en BizGuard
+    const connectors = await getConnectors();
+    const alreadyConfigured = connectors.some(c => c.port === port);
+    if (alreadyConfigured) {
+      return { occupied: true, reason: 'configured' };
+    }
+
+    // 2. Verificar si está en uso por el sistema (intenta escuchar temporalmente)
+    return new Promise((resolve) => {
+      const server = net.createServer();
+      server.once('error', (err: any) => {
+        resolve({ occupied: true, reason: 'system' });
+      });
+      server.once('listening', () => {
+        server.close(() => {
+          resolve({ occupied: false });
+        });
+      });
+      server.listen(port, '0.0.0.0');
+    });
+  } catch (error) {
+    return { occupied: true, reason: 'system' };
+  }
+}
+

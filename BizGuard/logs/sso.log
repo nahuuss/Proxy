@@ -1,0 +1,21 @@
+[11/6/2026, 12:15:15] [Dynamic-Fallback] Host still empty for URL: undefined | Data: {"headers":{}}
+[11/6/2026, 12:15:15] [INIT] fullHost=(empty) | cookieDomain=(none) | protocol=https
+[11/6/2026, 12:15:15] [INIT] redirectProxyUrl=https://bank.bzld.click/api/auth | dynamicCallbackUrl=(undefined)
+[11/6/2026, 12:15:15] [URL-Hint] Extracted real host from redirect URL: bank.bzld.click
+[11/6/2026, 12:15:15] Redirect callback: URL=https://bank.bzld.click, BaseURL=https://bank.bzld.click, DynamicHost=bank.bzld.click
+[11/6/2026, 12:15:15] [same-domain-check] urlDomain=bzld.click | baseDomain=bzld.click
+[11/6/2026, 12:15:15] [redirect->RETURN] Same domain, pass-through: https://bank.bzld.click
+[11/6/2026, 12:16:38] [Dynamic-Fallback] Host still empty for URL: undefined | Data: {"headers":{}}
+[11/6/2026, 12:16:38] [INIT] fullHost=(empty) | cookieDomain=(none) | protocol=https
+[11/6/2026, 12:16:38] [INIT] redirectProxyUrl=https://bank.bzld.click/api/auth | dynamicCallbackUrl=(undefined)
+[11/6/2026, 12:16:38] [URL-Hint] Extracted real host from redirect URL: bank.bzld.click
+[11/6/2026, 12:16:38] Redirect callback: URL=https://bank.bzld.click, BaseURL=https://bank.bzld.click, DynamicHost=bank.bzld.click
+[11/6/2026, 12:16:38] [same-domain-check] urlDomain=bzld.click | baseDomain=bzld.click
+[11/6/2026, 12:16:38] [redirect->RETURN] Same domain, pass-through: https://bank.bzld.click
+[11/6/2026, 12:18:14] [Dynamic-Fallback] Host still empty for URL: undefined | Data: {"headers":{}}
+[11/6/2026, 12:18:14] [INIT] fullHost=(empty) | cookieDomain=(none) | protocol=https
+[11/6/2026, 12:18:14] [INIT] redirectProxyUrl=https://bank.bzld.click/api/auth | dynamicCallbackUrl=(undefined)
+[11/6/2026, 12:18:14] [URL-Hint] Extracted real host from redirect URL: bank.bzld.click
+[11/6/2026, 12:18:14] Redirect callback: URL=https://bank.bzld.click, BaseURL=https://bank.bzld.click, DynamicHost=bank.bzld.click
+[11/6/2026, 12:18:14] [same-domain-check] urlDomain=bzld.click | baseDomain=bzld.click
+[11/6/2026, 12:18:14] [redirect->RETURN] Same domain, pass-through: https://bank.bzld.click

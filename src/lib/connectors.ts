@@ -1,4 +1,4 @@
-import { connectorsDb } from './db';
+import { connectorsDb, isBuildPhase } from './db';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -17,7 +17,11 @@ export interface Connector {
   isNtlm?: boolean;
   ntlmDomain?: string;
   entryPath?: string;
-  debugLog?: boolean; // Si true, escribe un log detallado en /debug-{id}.log en raíz del proyecto
+  harLog?: boolean; // Si true, escribe un log tipo HAR en logs/har-{id}.jsonl
+  trafficLog?: boolean; // Si true, escribe un log de tráfico por usuario en logs/traffic/{user}/
+  hbFirstPulse?: number; // Umbral opcional de activación del heartbeat en segundos
+  trafficRetentionValue?: number; // Valor de retención de logs de tráfico
+  trafficRetentionUnit?: 'seconds' | 'minutes' | 'hours' | 'days'; // Unidad de retención de logs de tráfico
   stats?: {
     requests: number;
     bytes: number;
@@ -33,6 +37,7 @@ let migrationPromise: Promise<void> | null = null;
 
 // Migración inicial de JSON a NeDB (solo si la DB está vacía)
 async function migrateIfNeeded() {
+  if (isBuildPhase()) return;
   try {
     const count = await connectorsDb.countAsync({});
     if (count === 0) {
@@ -54,6 +59,7 @@ if (!migrationPromise) {
 }
 
 export async function getConnectors(): Promise<Connector[]> {
+  if (isBuildPhase()) return [];
   if (migrationPromise) await migrationPromise;
   
   // Forzar recarga desde disco para evitar datos cacheados obsoletos en modo multi-worker de Next.js
@@ -71,6 +77,7 @@ export async function addConnector(connector: Omit<Connector, 'isActive'>) {
 }
 
 export async function getConnectorById(id: string): Promise<Connector | undefined> {
+  if (isBuildPhase()) return undefined;
   try { await connectorsDb.loadDatabaseAsync(); } catch(e) {}
   const connector = await connectorsDb.findOneAsync({ id });
   return (connector as unknown as Connector) || undefined;
