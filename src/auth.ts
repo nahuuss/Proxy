@@ -2,9 +2,12 @@ import NextAuth from "next-auth";
 import { skipCSRFCheck } from "@auth/core";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import Credentials from "next-auth/providers/credentials";
+import http from "http";
+import https from "https";
 import { getSettings } from "./lib/settings";
 import { logSSO } from "./lib/logger-sso";
-import { getConnectors } from "./lib/connectors";
+import { getConnectorById, getConnectors } from "./lib/connectors";
+import { buildCoreNtlmValidationUrl } from "./lib/core-ntlm";
 
 // Exportar como función dinámica para soportar múltiples hosts
 export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
@@ -28,20 +31,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
       ? `${cleanHost}:${incomingPort}` 
       : cleanHost;
     
-    logSSO(`[Connector-Match] Port ${incomingPort} matched connector "${matchingConnector.id}". Host: ${oldHost} -> ${fullHost}`);
+    logSSO(matchingConnector.id, `[Connector-Match] Port ${incomingPort} matched connector "${matchingConnector.id}". Host: ${oldHost} -> ${fullHost}`);
   } else if (!fullHost) {
     // Si el host sigue vacío (ej: req sin headers), fallback a settings globales
     const settings = await getSettings();
     if (settings.publicHost) {
       fullHost = settings.publicHost;
-      logSSO(`[Global-Settings-Match] Host was empty. Using fallback: ${fullHost}`);
+      logSSO(undefined, `[Global-Settings-Match] Host was empty. Using fallback: ${fullHost}`);
     } else {
       const headerDump: Record<string, string> = {};
       req?.headers.forEach((v, k) => { headerDump[k] = v; });
-      logSSO(`[Dynamic-Fallback] Host still empty for URL: ${req?.url}`, { headers: headerDump });
+      logSSO(undefined, `[Dynamic-Fallback] Host still empty for URL: ${req?.url}`, { headers: headerDump });
     }
   } else {
-    logSSO(`[Dynamic-Header] No connector match for port ${incomingPort}. Using detect: host=${fullHost}`);
+    logSSO(undefined, `[Dynamic-Header] No connector match for port ${incomingPort}. Using detect: host=${fullHost}`);
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -99,10 +102,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
           const baseUrl = ntlmConnector.targetUrl.replace(/\/$/, '');
           const testPath = ntlmConnector.entryPath ? ntlmConnector.entryPath.replace(/^\//, '') : '';
           const testUrl = `${baseUrl}/${testPath}`;
+          const testIsHttps = testUrl.startsWith("https://");
+          const agent = testIsHttps
+            ? new https.Agent({ keepAlive: true, rejectUnauthorized: ntlmConnector.strictTls === true })
+            : new http.Agent({ keepAlive: true });
           const valid = await new Promise<boolean>((resolve) => {
             httpntlm.get({
               username, password, domain, workstation: '',
               url: testUrl,
+              agent,
+              timeout: 15000,
             }, (err: any, res: any) => {
               if (err) { resolve(false); return; }
               // 401 = credenciales incorrectas. 200/302/404/500 = servidor respondió = credenciales OK
@@ -121,6 +130,73 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
           crmDomain: domain,
         };
       }
+    }),
+    Credentials({
+      id: "core-ntlm-login",
+      name: "Core NTLM Login",
+      credentials: {
+        username: { label: "Username", type: "text" },
+        password: { label: "Password", type: "password" },
+        domain: { label: "Domain", type: "text" },
+        connectorId: { label: "Connector", type: "text" }
+      },
+      async authorize(credentials) {
+        if (!credentials?.username || !credentials?.password || !credentials?.connectorId) return null;
+        const username = credentials.username as string;
+        const password = credentials.password as string;
+        const domain = (credentials.domain as string) || "";
+        const connectorId = credentials.connectorId as string;
+
+        const httpntlm = await import("httpntlm");
+        const connector = await getConnectorById(connectorId);
+        if (!connector || connector.connectorType !== "core" || !connector.isActive || !connector.coreNtlmDomain) {
+          logSSO(connectorId, `[CORE-NTLM-AUTH] Conector inválido o sin dominio NTLM configurado.`);
+          return null;
+        }
+
+        const validationUrl = buildCoreNtlmValidationUrl(connector);
+        const validationIsHttps = validationUrl.startsWith("https://");
+        const agent = validationIsHttps
+          ? new https.Agent({ keepAlive: true, rejectUnauthorized: connector.strictTls === true })
+          : new http.Agent({ keepAlive: true });
+
+        try {
+          logSSO(connectorId, `[CORE-NTLM-AUTH] Validando credenciales contra ${validationUrl} | strictTls=${connector.strictTls === true}`);
+          const valid = await new Promise<boolean>((resolve) => {
+            httpntlm.get({
+              username,
+              password,
+              domain: domain || connector.coreNtlmDomain || "",
+              workstation: '',
+              url: validationUrl,
+              agent,
+              timeout: 15000,
+            }, (err: any, res: any) => {
+              if (err) {
+                logSSO(connectorId, `[CORE-NTLM-AUTH] Error validando NTLM: ${err.message || err}`);
+                resolve(false);
+                return;
+              }
+              logSSO(connectorId, `[CORE-NTLM-AUTH] Respuesta NTLM status=${res?.statusCode}`);
+              resolve(res.statusCode !== 401);
+            });
+          });
+          if (!valid) return null;
+        } catch {
+          logSSO(connectorId, `[CORE-NTLM-AUTH] Excepción inesperada durante validación.`);
+          return null;
+        }
+
+        return {
+          id: `${connectorId}:${username}`,
+          email: `${username}@${domain || connector.coreNtlmDomain}`,
+          name: username,
+          coreUser: username,
+          corePass: password,
+          coreDomain: domain || connector.coreNtlmDomain,
+          coreConnectorId: connectorId,
+        };
+      }
     })
   ].filter(Boolean) as any[];
 
@@ -130,8 +206,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
   // which doesn't match Azure AD's registered redirect URI → OAuthCallbackError.
   const redirectProxyUrl = fullHost ? `${protocol}://${fullHost}/api/auth` : process.env.AUTH_URL ? `${process.env.AUTH_URL}/api/auth` : undefined;
 
-  logSSO(`[INIT] fullHost=${fullHost || "(empty)"} | cookieDomain=${cookieDomain || "(none)"} | protocol=${protocol}`);
-  logSSO(`[INIT] redirectProxyUrl=${redirectProxyUrl || "(undefined)"} | dynamicCallbackUrl=${dynamicCallbackUrl || "(undefined)"}`);
+  logSSO(matchingConnector?.id, `[INIT] fullHost=${fullHost || "(empty)"} | cookieDomain=${cookieDomain || "(none)"} | protocol=${protocol}`);
+  logSSO(matchingConnector?.id, `[INIT] redirectProxyUrl=${redirectProxyUrl || "(undefined)"} | dynamicCallbackUrl=${dynamicCallbackUrl || "(undefined)"}`);
 
   return {
     pages: { signIn: '/login' },
@@ -174,7 +250,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
     logger: {
       error(error: any) {
         const cause = error?.cause;
-        logSSO(`Auth ERROR: ${error?.message || error}`, { detail: error, cause: cause?.message || cause });
+        logSSO(undefined, `Auth ERROR: ${error?.message || error}`, { detail: error, cause: cause?.message || cause });
         if (cause) console.error("[Auth ERROR CAUSE]", cause?.message || cause, cause?.stack || "");
       },
       warn(code: string) {
@@ -189,27 +265,40 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
       async authorized({ auth, request }: any) {
         const { nextUrl } = request;
         const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "";
+        const port = parseInt(host.split(":")[1] || "80");
+        const connectors = await getConnectors();
+        const conn = connectors.find(c => c.port === port);
+        const connectorId = conn?.id;
         const isLoggedIn = !!auth?.user;
-        logSSO(`[authorized] path=${nextUrl.pathname} | host=${host} | isLoggedIn=${isLoggedIn} | user=${auth?.user?.email || "none"}`);
+        logSSO(connectorId, `[authorized] path=${nextUrl.pathname} | host=${host} | isLoggedIn=${isLoggedIn} | user=${auth?.user?.email || "none"}`);
 
-        if (host.includes(":3000")) { logSSO(`[authorized] -> BYPASS (localhost:3000)`); return true; }
+        if (host.includes(":3000")) { logSSO(connectorId, `[authorized] -> BYPASS (localhost:3000)`); return true; }
 
         const settings = await getSettings();
-        if (settings.bypassAuth) { logSSO(`[authorized] -> BYPASS (bypassAuth=true)`); return true; }
+        if (settings.bypassAuth) { logSSO(connectorId, `[authorized] -> BYPASS (bypassAuth=true)`); return true; }
 
         const isProxyRoute = nextUrl.pathname.startsWith("/proxy") || nextUrl.pathname === "/";
 
         if (isProxyRoute) {
-          if (isLoggedIn) { logSSO(`[authorized] -> ALLOW (logged in, proxy route)`); return true; }
-          logSSO(`[authorized] -> DENY (not logged in, proxy route)`);
+          if (isLoggedIn) { logSSO(connectorId, `[authorized] -> ALLOW (logged in, proxy route)`); return true; }
+          logSSO(connectorId, `[authorized] -> DENY (not logged in, proxy route)`);
           return false;
         }
-        logSSO(`[authorized] -> ALLOW (non-proxy route)`);
+        logSSO(connectorId, `[authorized] -> ALLOW (non-proxy route)`);
         return true;
       },
 
       // redirect dentro del scope dinámico para acceder a fullHost y protocol
       async redirect({ url, baseUrl }: { url: string; baseUrl: string }) {
+        let port = 80;
+        try {
+          const u = new URL(url.startsWith("/") ? baseUrl : url);
+          port = parseInt(u.port || (u.protocol === "https:" ? "443" : "80"));
+        } catch {}
+        const connectors = await getConnectors();
+        const conn = connectors.find(c => c.port === port);
+        const connectorId = conn?.id;
+
         // ── Determinar el host efectivo real para esta redirección ──────────
         // fullHost puede ser vacío (llamadas internas de NextAuth sin req context)
         // o ser localhost:3000 (la semilla del .env.local).
@@ -227,12 +316,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
             if (notInternal) {
               resolvedHost = urlParsed.port ? `${urlHost}:${urlParsed.port}` : urlHost;
               resolvedProtocol = urlParsed.protocol.replace(":", "");
-              logSSO(`[URL-Hint] Extracted real host from redirect URL: ${resolvedHost}`);
+              logSSO(connectorId, `[URL-Hint] Extracted real host from redirect URL: ${resolvedHost}`);
             }
           } catch (e) { /* no parseable, continuar */ }
         }
 
-        logSSO(`Redirect callback: URL=${url}, BaseURL=${baseUrl}, DynamicHost=${resolvedHost || "(empty)"}`);
+        logSSO(connectorId, `Redirect callback: URL=${url}, BaseURL=${baseUrl}, DynamicHost=${resolvedHost || "(empty)"}`);
         
         // El 'baseUrl' viene del AUTH_URL del .env (localhost:3000 - semilla)
         // Solo es "incorrecto" si tenemos un host alternativo real para sustituirlo
@@ -243,13 +332,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
           : baseUrl;
 
         if (canFix) {
-          logSSO(`[BaseURL-Fix] Mapping internal base: ${baseUrl} -> ${effectiveBase}`);
+          logSSO(connectorId, `[BaseURL-Fix] Mapping internal base: ${baseUrl} -> ${effectiveBase}`);
         }
 
         // URL relativa: completar con effectiveBase
         if (url.startsWith("/")) {
           const result = `${effectiveBase}${url}`;
-          logSSO(`[redirect->RETURN] Relative path resolved: ${result}`);
+          logSSO(connectorId, `[redirect->RETURN] Relative path resolved: ${result}`);
           return result;
         }
 
@@ -260,14 +349,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
             const hostIsInternal = u.hostname.includes("localhost") || u.hostname.includes("127.0.0.1") || u.hostname.includes("0.0.0.0");
             if (hostIsInternal && resolvedHost) {
               const fixed = `${resolvedProtocol}://${resolvedHost}${u.pathname}${u.search}`;
-              logSSO(`[URL-Fix] Rewrote internal URL: ${url} -> ${fixed}`);
-              logSSO(`[redirect->RETURN] ${fixed}`);
+              logSSO(connectorId, `[URL-Fix] Rewrote internal URL: ${url} -> ${fixed}`);
+              logSSO(connectorId, `[redirect->RETURN] ${fixed}`);
               return fixed;
             }
-            logSSO(`[redirect->RETURN] URL as-is (non-internal host): ${u.toString()}`);
+            logSSO(connectorId, `[redirect->RETURN] URL as-is (non-internal host): ${u.toString()}`);
             return u.toString();
           } catch(e) {
-            logSSO(`[URL-Error] URL parsing failed for ${url}: ${e}`);
+            logSSO(connectorId, `[URL-Error] URL parsing failed for ${url}: ${e}`);
           }
         }
 
@@ -278,16 +367,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
           const getDomain = (h: string) => h.split(":")[0].split(".").slice(-2).join(".");
           const urlDomain = getDomain(urlObj.hostname);
           const baseDomain = getDomain(baseObj.hostname);
-          logSSO(`[same-domain-check] urlDomain=${urlDomain} | baseDomain=${baseDomain}`);
-          if (urlDomain === baseDomain) { logSSO(`[redirect->RETURN] Same domain, pass-through: ${url}`); return url; }
-        } catch (e) { logSSO(`[same-domain-check] error: ${e}`); }
+          logSSO(connectorId, `[same-domain-check] urlDomain=${urlDomain} | baseDomain=${baseDomain}`);
+          if (urlDomain === baseDomain) { logSSO(connectorId, `[redirect->RETURN] Same domain, pass-through: ${url}`); return url; }
+        } catch (e) { logSSO(connectorId, `[same-domain-check] error: ${e}`); }
 
-        logSSO(`[redirect->RETURN] Fallback to effectiveBase: ${effectiveBase}`);
+        logSSO(connectorId, `[redirect->RETURN] Fallback to effectiveBase: ${effectiveBase}`);
         return effectiveBase;
       },
 
       async signIn({ user, account }: any) {
-        logSSO(`[signIn] user=${user?.email} | provider=${account?.provider} | type=${account?.type}`);
+        logSSO(undefined, `[signIn] user=${user?.email} | provider=${account?.provider} | type=${account?.type}`);
         return true;
       },
       async jwt({ token, user, account }: any) {
@@ -296,6 +385,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
           token.crmPass = (user as any).crmPass;
           token.crmDomain = (user as any).crmDomain;
         }
+        if (user && account?.provider === "core-ntlm-login") {
+          token.coreUser = (user as any).coreUser;
+          token.corePass = (user as any).corePass;
+          token.coreDomain = (user as any).coreDomain;
+          token.coreConnectorId = (user as any).coreConnectorId;
+        }
         return token;
       },
       async session({ session, token }: any) {
@@ -303,6 +398,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
           (session as any).crmUser = token.crmUser;
           (session as any).crmPass = token.crmPass;
           (session as any).crmDomain = token.crmDomain;
+        }
+        if (token.coreUser) {
+          (session as any).coreUser = token.coreUser;
+          (session as any).corePass = token.corePass;
+          (session as any).coreDomain = token.coreDomain;
+          (session as any).coreConnectorId = token.coreConnectorId;
         }
         return session;
       },

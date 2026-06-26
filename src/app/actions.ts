@@ -1,9 +1,12 @@
 "use server"
 
+import { auth } from "@/auth";
 import { addConnector, updateConnector, getConnectorById, deleteConnector, getConnectors } from "@/lib/connectors";
 import { revalidatePath } from "next/cache";
 import { proxyManager } from "@/lib/proxy-manager";
 import net from "net";
+import { getSettings, updateSettings } from "@/lib/settings";
+import { headers } from "next/headers";
 
 export async function createConnectorAction(prevState: any, formData: FormData) {
   try {
@@ -18,9 +21,12 @@ export async function createConnectorAction(prevState: any, formData: FormData) 
     const connectorType = (formData.get("connectorType") as string || "generic") as 'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test';
     const isNtlm = connectorType === 'dynamics-crm' || formData.get("isNtlm") === "on";
     const ntlmDomain = (formData.get("ntlmDomain") as string || "").trim() || undefined;
+    const coreNtlmDomain = (formData.get("coreNtlmDomain") as string || "").trim() || undefined;
     const entryPath = (formData.get("entryPath") as string || "").trim() || undefined;
     const harLog = formData.get("harLog") === "on";
     const trafficLog = formData.get("trafficLog") === "on";
+    const ssoLog = formData.get("ssoLog") === "on";
+    const hbLog = formData.get("hbLog") === "on";
     const hbFirstPulseStr = formData.get("hbFirstPulse") as string;
     const hbFirstPulse = hbFirstPulseStr ? parseInt(hbFirstPulseStr) : undefined;
     const trafficRetentionValueStr = formData.get("trafficRetentionValue") as string;
@@ -38,9 +44,12 @@ export async function createConnectorAction(prevState: any, formData: FormData) 
       connectorType,
       isNtlm,
       ntlmDomain,
+      coreNtlmDomain,
       entryPath,
       harLog,
       trafficLog,
+      ssoLog,
+      hbLog,
       hbFirstPulse,
       trafficRetentionValue,
       trafficRetentionUnit
@@ -67,16 +76,19 @@ export async function updateConnectorAction(id: string, formData: FormData) {
   // Para dynamics-crm, isNtlm siempre true aunque el hidden field diga "on"
   const isNtlm = connectorType === 'dynamics-crm' || formData.get("isNtlm") === "on";
   const ntlmDomain = (formData.get("ntlmDomain") as string || "").trim() || undefined;
+  const coreNtlmDomain = (formData.get("coreNtlmDomain") as string || "").trim() || undefined;
   const entryPath = (formData.get("entryPath") as string || "").trim() || undefined;
   const harLog = formData.get("harLog") === "on";
   const trafficLog = formData.get("trafficLog") === "on";
+  const ssoLog = formData.get("ssoLog") === "on";
+  const hbLog = formData.get("hbLog") === "on";
   const hbFirstPulseStr = formData.get("hbFirstPulse") as string;
   const hbFirstPulse = hbFirstPulseStr ? parseInt(hbFirstPulseStr) : undefined;
   const trafficRetentionValueStr = formData.get("trafficRetentionValue") as string;
   const trafficRetentionValue = trafficRetentionValueStr ? parseInt(trafficRetentionValueStr) : undefined;
   const trafficRetentionUnit = (formData.get("trafficRetentionUnit") as string || "hours") as 'seconds' | 'minutes' | 'hours' | 'days';
 
-  const updated = await updateConnector(id, { name, description, targetUrl, publicHost, port, bypassAuth, connectorType, isNtlm, ntlmDomain, entryPath, harLog, trafficLog, hbFirstPulse, trafficRetentionValue, trafficRetentionUnit });
+  const updated = await updateConnector(id, { name, description, targetUrl, publicHost, port, bypassAuth, connectorType, isNtlm, ntlmDomain, coreNtlmDomain, entryPath, harLog, trafficLog, ssoLog, hbLog, hbFirstPulse, trafficRetentionValue, trafficRetentionUnit });
   
   if (updated) {
     // Reiniciar el conector con la nueva configuración
@@ -133,3 +145,44 @@ export async function checkPortAction(port: number): Promise<{ occupied: boolean
   }
 }
 
+export async function updateGlobalSettingsAction(prevState: any, formData: FormData) {
+  const currentSettings = await getSettings();
+  const headersList = await headers();
+  const host = headersList.get("host") || "";
+  const isLocalHost = host.includes("localhost") || host.includes("127.0.0.1") || host.includes(":3000");
+  const session = currentSettings.bypassAuth || isLocalHost ? null : await auth();
+
+  if (!currentSettings.bypassAuth && !isLocalHost && !session?.user) {
+    return { success: false, message: "Sesion no valida para actualizar configuracion." };
+  }
+
+  const publicHost = (formData.get("publicHost") as string || "").trim();
+  const authUrl = (formData.get("authUrl") as string || "").trim();
+  const internalTarget = (formData.get("internalTarget") as string || "").trim();
+  const hbFirstPulseStr = (formData.get("hbFirstPulse") as string || "").trim();
+  const memoryResetIntervalMinutesStr = (formData.get("memoryResetIntervalMinutes") as string || "").trim();
+  const bypassAuth = formData.get("bypassAuth") === "on";
+
+  const hbFirstPulse = hbFirstPulseStr ? parseInt(hbFirstPulseStr, 10) : 20;
+  const memoryResetIntervalMinutes = memoryResetIntervalMinutesStr ? parseInt(memoryResetIntervalMinutesStr, 10) : 30;
+
+  if (!Number.isFinite(hbFirstPulse) || hbFirstPulse <= 0) {
+    return { success: false, message: "El tiempo de HB Shield debe ser mayor a 0." };
+  }
+
+  if (!Number.isFinite(memoryResetIntervalMinutes) || memoryResetIntervalMinutes <= 0) {
+    return { success: false, message: "El tiempo de reset automatico debe ser mayor a 0." };
+  }
+
+  await updateSettings({
+    publicHost,
+    authUrl,
+    internalTarget,
+    hbFirstPulse,
+    bypassAuth,
+    memoryResetIntervalMinutes,
+  });
+
+  revalidatePath("/");
+  return { success: true, message: "Configuracion global actualizada." };
+}

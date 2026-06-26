@@ -5,11 +5,12 @@ import httpntlm from "httpntlm";
 import zlib from "zlib";
 import { EventEmitter } from "events";
 import { Connector } from "./connectors";
-import { logHB } from "./logger-hb";
+import { logHB as rawLogHB } from "./logger-hb";
 import { logHarEntry } from "./logger-har";
 import { trafficLogger, extractCookieNames, TrafficEntry, DebugEntry } from "./logger-traffic";
 import { applyDeepRewrite, serveAsBlobDownload, renderBgJobPage, rewriteHeaders } from "./proxy-utils";
 import { getRulesFor } from "./rules";
+import { buildCoreNtlmValidationUrl, hasCoreNtlmSessionForConnector, isCoreNtlmPath } from "./core-ntlm";
 
 export type MetricCallback = (id: string, bytes: number, latency?: number) => void;
 
@@ -45,6 +46,7 @@ setInterval(() => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function createProxyServer(connector: Connector, onMetric: MetricCallback, hbFirstPulseMs: number) {
+  const logHB = (message: string) => rawLogHB(connector.id, message);
   const targetUrl = new URL(connector.targetUrl);
   const isHttps = targetUrl.protocol === "https:";
   const statusEvents = new EventEmitter();
@@ -81,17 +83,28 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
 
       const onStatus = (event: Record<string, unknown>) => {
         if (streamClientId && event.clientId && event.clientId !== streamClientId) return;
-        res.write(`data: ${JSON.stringify(event)}\n\n`);
+        if (!res.destroyed) {
+          res.write(`data: ${JSON.stringify(event)}\n\n`);
+        }
       };
       const heartbeat = setInterval(() => {
         if (!res.destroyed) res.write(': heartbeat\n\n');
       }, 15000);
 
       statusEvents.on("status", onStatus);
-      req.on('close', () => {
+
+      let cleaned = false;
+      const cleanupSSE = () => {
+        if (cleaned) return;
+        cleaned = true;
         clearInterval(heartbeat);
         statusEvents.off("status", onStatus);
-      });
+      };
+
+      req.on('close', cleanupSSE);
+      req.on('aborted', cleanupSSE);
+      res.on('close', cleanupSSE);
+      res.on('finish', cleanupSSE);
       return;
     }
 
@@ -125,6 +138,9 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
         safeHdrs['content-length'] = String(job.responseBody.length);
         res.writeHead(job.statusCode || 200, safeHdrs);
         res.end(job.responseBody);
+        
+        // Liberar inmediatamente el buffer de la memoria eliminando el trabajo del mapa
+        bgJobs.delete(jobId);
         return;
       }
       res.writeHead(404); res.end();
@@ -210,6 +226,28 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
 
     // Debug log de inicio de request
     logDebugEntry('[REQUEST-IN]', `XHR=${isAjax} hbEligible=${hbEligible}`);
+
+    const buildTrafficEntry = (opts: { elapsed: number; ttfb?: number; status: number; reqSize: number; resSize: number; err?: string; resHeaders?: Record<string, string | string[] | undefined> }): TrafficEntry | null => {
+      const username = (req as any).session?.crmUser || (req as any).session?.coreUser || (req as any).session?.user?.email || (req as any).session?.user?.name || 'anonymous';
+      return {
+        ts: new Date(startTime).toISOString(),
+        elapsed: opts.elapsed,
+        ...(opts.ttfb !== undefined ? { ttfb: opts.ttfb } : {}),
+        user: username,
+        conn: connector.id,
+        method: req.method || 'GET',
+        url: req.url || '/',
+        status: opts.status,
+        reqSize: opts.reqSize,
+        resSize: opts.resSize,
+        ct: (opts.resHeaders?.['content-type'] || 'unknown') as string,
+        xhr: isAjax,
+        err: opts.err || null,
+        cookies: extractCookieNames(req.headers.cookie),
+        reqHdrs: req.headers as Record<string, string | string[] | undefined>,
+        resHdrs: opts.resHeaders || {},
+      };
+    };
 
     const emitHeartbeatEnd = (status?: number, failed = false) => {
       if (!isHeartbeatActive || heartbeatEndEmitted) return;
@@ -334,8 +372,102 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
       }, remainingTime);
     };
 
-    // ─── NTLM HANDSHAKE ──────────────────────────────────────────────────────
+    // ─── CORE NTLM HANDSHAKE (EXCLUSIVO /LoginExterno.aspx) ─────────────────
+    const isCoreNtlmRequest = connector.connectorType === "core" && isCoreNtlmPath(req.url);
     const session = (req as any).session;
+    if (isCoreNtlmRequest && hasCoreNtlmSessionForConnector(session, connector.id)) {
+      const bodyChunks: Buffer[] = [];
+      req.on('data', (chunk: Buffer) => bodyChunks.push(chunk));
+      req.on('end', () => {
+        const body = Buffer.concat(bodyChunks);
+        const method = (req.method || 'GET').toLowerCase();
+        const ntlmFn = (httpntlm as any)[method] || httpntlm.get;
+        const validationUrl = buildCoreNtlmValidationUrl(connector);
+
+        if (hbEligible) startHbShield();
+
+        const ntlmHeaders: Record<string, string> = {};
+        for (const [k, v] of Object.entries(options.headers || {})) {
+          if (typeof v === 'string') ntlmHeaders[k] = v;
+          else if (Array.isArray(v)) ntlmHeaders[k] = v.join(', ');
+        }
+        if (body.length > 0) ntlmHeaders['content-length'] = String(body.length);
+
+        ntlmFn({
+          username: session.coreUser,
+          password: session.corePass,
+          domain: session.coreDomain || connector.coreNtlmDomain || "",
+          workstation: '',
+          url: validationUrl,
+          body,
+          headers: ntlmHeaders,
+          agent,
+          timeout: 15000,
+          binary: true,
+        }, (err: any, ntlmRes: any) => {
+          if (hbTimer) clearTimeout(hbTimer);
+          if (hbInterval) clearInterval(hbInterval);
+
+          if (err) {
+            logHB(`[CORE-NTLM-ERR] ${req.method} ${req.url} → ${err.message}`);
+            if (!res.headersSent) { res.writeHead(502); res.end(`NTLM Error: ${err.message}`); }
+            return;
+          }
+
+          logHB(`[CORE-NTLM-OK] ${req.method} ${req.url} → ${ntlmRes.statusCode}`);
+          onMetric(connector.id, ntlmRes.body?.length || 0, Date.now() - startTime);
+
+          if (!res.headersSent) {
+            const fwdHeaders = rewriteHeaders(ntlmRes.headers, targetUrl, incomingHost);
+            delete fwdHeaders['transfer-encoding'];
+            delete fwdHeaders['content-length'];
+
+            let responseBody: Buffer = ntlmRes.body ? (Buffer.isBuffer(ntlmRes.body) ? ntlmRes.body : Buffer.from(ntlmRes.body)) : Buffer.alloc(0);
+            const contentEncoding = (fwdHeaders['content-encoding'] || '') as string;
+
+            if (responseBody.length > 0 && (contentEncoding === 'gzip' || contentEncoding === 'deflate')) {
+              try {
+                responseBody = contentEncoding === 'gzip' ? zlib.gunzipSync(responseBody) : zlib.inflateSync(responseBody);
+                delete fwdHeaders['content-encoding'];
+              } catch {}
+            }
+
+            const contentType = (fwdHeaders['content-type'] || '') as string;
+            const isText = (contentType.includes('text') || contentType.includes('javascript') || contentType.includes('json') || contentType.includes('xml')) &&
+              !/\.(png|jpg|jpeg|gif|ico|cur|svg)$/i.test(urlPart);
+
+            if (isText && responseBody.length > 0) {
+              let bodyStr = responseBody.toString('utf8');
+              bodyStr = applyDeepRewrite(bodyStr, targetUrl, incomingHost);
+              bodyStr = rules.rewriteBody(bodyStr);
+              responseBody = Buffer.from(bodyStr, 'utf8');
+            }
+
+            fwdHeaders['content-length'] = String(responseBody.length);
+            res.writeHead(ntlmRes.statusCode, fwdHeaders);
+            res.end(responseBody);
+
+            logHarEntry(connector.id, connector.harLog, {
+              startTime,
+              elapsedMs: Date.now() - startTime,
+              req,
+              reqBody: body,
+              resStatusCode: ntlmRes.statusCode,
+              resHeaders: fwdHeaders,
+              resBody: responseBody,
+              username: session.coreUser
+            });
+            if (connector.trafficLog) {
+              const te = buildTrafficEntry({ elapsed: Date.now() - startTime, status: ntlmRes.statusCode, reqSize: body.length, resSize: responseBody.length, resHeaders: fwdHeaders });
+              if (te) trafficLogger.log(te);
+            }
+          }
+        });
+      });
+      return;
+    }
+
+    // ─── NTLM HANDSHAKE ──────────────────────────────────────────────────────
     if ((connector.isNtlm || connector.connectorType === 'dynamics-crm') && session?.crmUser && session?.crmPass) {
       const bodyChunks: Buffer[] = [];
       req.on('data', (chunk: Buffer) => bodyChunks.push(chunk));
@@ -357,7 +489,7 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
           username: session.crmUser, password: session.crmPass,
           domain: session.crmDomain || connector.ntlmDomain || "",
           workstation: '', url: `${targetUrl.protocol}//${targetUrl.host}${req.url}`,
-          body, headers: ntlmHeaders, binary: true,
+          body, headers: ntlmHeaders, agent, timeout: 15000, binary: true,
         }, (err: any, ntlmRes: any) => {
           if (hbTimer) clearTimeout(hbTimer);
           if (hbInterval) clearInterval(hbInterval);
@@ -434,7 +566,7 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
                 else if (isPDF && pdfIdx > 0) finalBuffer = responseBody.subarray(pdfIdx);
                 else if (isOLE && oleIdx > 0) finalBuffer = responseBody.subarray(oleIdx);
 
-                serveAsBlobDownload(res, req, finalBuffer, fwdHeaders, incomingHost, isHtmlCommentOpen);
+                serveAsBlobDownload(res, req, finalBuffer, fwdHeaders, incomingHost, isHtmlCommentOpen, connector.id);
               } else {
                 if (res.headersSent) {
                   // Modo full-page nav: headers ya enviados.
@@ -490,29 +622,6 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
     const suspiciousHosts = [internalHost, "localhost:3000", "127.0.0.1:3000", "0.0.0.0:3000"];
     const encodedHosts = suspiciousHosts.map(h => encodeURIComponent(h));
     const uniqueSuspicious = Array.from(new Set([...suspiciousHosts, ...encodedHosts]));
-
-    // Helper para construir entrada de traffic log
-    const buildTrafficEntry = (opts: { elapsed: number; ttfb?: number; status: number; reqSize: number; resSize: number; err?: string; resHeaders?: Record<string, string | string[] | undefined> }): TrafficEntry | null => {
-      const username = (req as any).session?.crmUser || (req as any).session?.user?.email || (req as any).session?.user?.name || 'anonymous';
-      return {
-        ts: new Date(startTime).toISOString(),
-        elapsed: opts.elapsed,
-        ...(opts.ttfb !== undefined ? { ttfb: opts.ttfb } : {}),
-        user: username,
-        conn: connector.id,
-        method: req.method || 'GET',
-        url: req.url || '/',
-        status: opts.status,
-        reqSize: opts.reqSize,
-        resSize: opts.resSize,
-        ct: (opts.resHeaders?.['content-type'] || 'unknown') as string,
-        xhr: isAjax,
-        err: opts.err || null,
-        cookies: extractCookieNames(req.headers.cookie),
-        reqHdrs: req.headers as Record<string, string | string[] | undefined>,
-        resHdrs: opts.resHeaders || {},
-      };
-    };
 
     const proxyReq = (isHttps ? https : http).request(options, (proxyRes) => {
       const ttfbMs = Date.now() - startTime; // TTFB real — tiempo hasta primer byte del backend
@@ -606,7 +715,7 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
               logHB(`[HB-GUARD] OLE detectado en offset ${oleIdx}, recortando buffer...`);
               finalBuffer = buffer.subarray(oleIdx);
             }
-            serveAsBlobDownload(res, req, finalBuffer, proxyRes.headers, incomingHost, isHtmlCommentOpen);
+            serveAsBlobDownload(res, req, finalBuffer, proxyRes.headers, incomingHost, isHtmlCommentOpen, connector.id);
             
             logHarEntry(connector.id, connector.harLog, {
               startTime,
@@ -671,7 +780,11 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
           }
 
           if (jobId) {
-            bgJobs.set(jobId, { ...bgJobs.get(jobId)!, status: 'done', statusCode: proxyRes.statusCode, responseHeaders: finalHeaders, responseBody: buffer });
+            if (isHeartbeatActive) {
+              bgJobs.set(jobId, { ...bgJobs.get(jobId)!, status: 'done', statusCode: proxyRes.statusCode, responseHeaders: finalHeaders, responseBody: buffer });
+            } else {
+              bgJobs.delete(jobId);
+            }
           }
 
           logHarEntry(connector.id, connector.harLog, {
@@ -706,7 +819,11 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
           if (hbInterval) clearInterval(hbInterval);
           res.end();
           if (jobId) {
-            bgJobs.set(jobId, { ...bgJobs.get(jobId)!, status: 'done', statusCode: proxyRes.statusCode, responseHeaders: finalHeaders, responseBody: Buffer.alloc(0) });
+            if (isHeartbeatActive) {
+              bgJobs.set(jobId, { ...bgJobs.get(jobId)!, status: 'done', statusCode: proxyRes.statusCode, responseHeaders: finalHeaders, responseBody: Buffer.alloc(0) });
+            } else {
+              bgJobs.delete(jobId);
+            }
           }
           logHarEntry(connector.id, connector.harLog, {
             startTime,
@@ -742,6 +859,13 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
         resBody: e.message,
         username: (req as any).session?.crmUser || (req as any).session?.user?.name || (req as any).session?.user?.email
       });
+      if (jobId) {
+        if (isHeartbeatActive) {
+          bgJobs.set(jobId, { ...bgJobs.get(jobId)!, status: 'error', error: e.message });
+        } else {
+          bgJobs.delete(jobId);
+        }
+      }
       if (connector.trafficLog) {
         const reqSize = reqBodyChunks.reduce((a, b) => a + b.length, 0);
         const te = buildTrafficEntry({ elapsed: Date.now() - startTime, status: 502, reqSize, resSize: 0, err: e.message, resHeaders: {} });

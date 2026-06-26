@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Terminal, Plus, LayoutDashboard, LogOut } from "lucide-react";
+import { GlobalSettings } from "@/lib/settings";
+import { SidebarSettingsMenu } from "./SidebarSettingsMenu";
 
-export function Sidebar() {
+export function Sidebar({ settings }: { settings: GlobalSettings }) {
   return (
     <aside className="fixed left-0 top-0 h-full flex flex-col py-6 border-r border-outline-variant/15 bg-background w-48 z-50">
       <div className="px-4 mb-6">
@@ -28,6 +30,7 @@ export function Sidebar() {
       </nav>
 
       <div className="px-4 pt-8 border-t border-outline-variant/15">
+        <SidebarSettingsMenu settings={settings} />
         <Link href="/api/auth/signout" className="flex items-center gap-4 px-4 py-3 text-on-surface-variant hover:text-on-surface transition-all duration-300">
           <LogOut className="w-5 h-5" />
           <span className="font-label text-xs font-medium uppercase tracking-widest">Logout</span>

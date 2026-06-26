@@ -16,9 +16,12 @@ export interface Connector {
   connectorType?: 'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test';
   isNtlm?: boolean;
   ntlmDomain?: string;
+  coreNtlmDomain?: string;
   entryPath?: string;
-  harLog?: boolean; // Si true, escribe un log tipo HAR en logs/har-{id}.jsonl
-  trafficLog?: boolean; // Si true, escribe un log de tráfico por usuario en logs/traffic/{user}/
+  harLog?: boolean; // Si true, escribe un log tipo HAR en logs/har/{id}/YYYY-MM-DD.jsonl
+  trafficLog?: boolean; // Si true, escribe un log de tráfico en logs/traffic/{id}/
+  ssoLog?: boolean; // Si true, escribe un log de SSO en logs/sso/{id}/YYYY-MM-DD.log
+  hbLog?: boolean; // Si true, escribe un log de Heartbeat en logs/hb/{id}/YYYY-MM-DD.log
   hbFirstPulse?: number; // Umbral opcional de activación del heartbeat en segundos
   trafficRetentionValue?: number; // Valor de retención de logs de tráfico
   trafficRetentionUnit?: 'seconds' | 'minutes' | 'hours' | 'days'; // Unidad de retención de logs de tráfico

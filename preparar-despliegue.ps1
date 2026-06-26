@@ -69,6 +69,7 @@ if (Test-Path ".env.local") {
     Copy-Item -Path ".env.local" -Destination "$dist/.env" -Force
 }
 
+
 # 4. ENTREGA ENTERPRISE: Documentación y SQL
 Write-Host "[6/6] Incluyendo documentacion Enterprise (context/sql)..."
 if (Test-Path "context") {

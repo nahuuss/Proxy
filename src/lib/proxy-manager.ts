@@ -10,6 +10,8 @@ import { getSettings, GlobalSettings } from "./settings";
 import { decode } from "@auth/core/jwt";
 import fs from "fs";
 import path from "path";
+import { getLastCompactionTime, getCurrentCompactionIntervalMs } from "./db";
+import { hasCoreNtlmSessionForConnector, isCoreNtlmPath } from "./core-ntlm";
 
 declare global {
   var proxyManager: ProxyManager | undefined;
@@ -93,7 +95,11 @@ class ProxyManager extends EventEmitter {
     throughput: 0, // MB/s
     cpuLoad: 0,    // %
     memUsage: 0,   // %
-    activeHeartbeats: 0 // HB Shield activos
+    activeHeartbeats: 0, // HB Shield activos
+    nodeMemUsage: 0, // Consumo en MB de Node.js
+    nodeMemPercent: 0, // Porcentaje de RAM total consumida por Node.js
+    lastMemoryReset: Date.now(),
+    nextMemoryReset: Date.now() + getCurrentCompactionIntervalMs()
   };
 
   // Contador público de heartbeats activos (accesible desde proxy-server)
@@ -151,6 +157,13 @@ class ProxyManager extends EventEmitter {
       const freeMem = os.freemem();
       this.globalMetrics.memUsage = ((totalMem - freeMem) / totalMem) * 100;
 
+      // CÁLCULO MEMORIA NODE Y RESET DATA
+      const rssMb = process.memoryUsage().rss / 1024 / 1024;
+      this.globalMetrics.nodeMemUsage = rssMb;
+      this.globalMetrics.nodeMemPercent = totalMem > 0 ? (process.memoryUsage().rss / totalMem) * 100 : 0;
+      this.globalMetrics.lastMemoryReset = getLastCompactionTime();
+      this.globalMetrics.nextMemoryReset = getLastCompactionTime() + getCurrentCompactionIntervalMs();
+
       // HEARTBEAT SHIELD COUNTER
       this.globalMetrics.activeHeartbeats = this.heartbeatCount;
 
@@ -181,7 +194,7 @@ class ProxyManager extends EventEmitter {
           fs.rename(fp + '.tmp', fp, () => { this.syncInFlight = false; });
         });
       }
-    }, 500);
+    }, 5000);
 
     this.pingAll();
     setInterval(() => this.pingAll(), 15000);
@@ -407,8 +420,9 @@ class ProxyManager extends EventEmitter {
       // NTLM siempre necesita sesión para obtener credenciales, aunque bypassAuth esté activo.
       // dynamics-crm implica NTLM aunque isNtlm no esté seteado explícitamente en DB.
       const needsSessionForNtlm = connector?.isNtlm === true || connector?.connectorType === 'dynamics-crm';
+      const needsCoreNtlmSession = connector?.connectorType === 'core' && isCoreNtlmPath(url);
 
-      if (requiresAuth || needsSessionForNtlm) {
+      if (requiresAuth || needsSessionForNtlm || needsCoreNtlmSession) {
         try {
           const session = await verifySession(req.headers.cookie || "");
           (req as any).session = session;
@@ -428,6 +442,14 @@ class ProxyManager extends EventEmitter {
             const targetPath = (url === '/' && connector?.entryPath) ? connector.entryPath : url;
             const absoluteCallback = `${protocol}://${hostHeader}${targetPath}`;
 
+            if (needsCoreNtlmSession && connector) {
+              const coreLoginUrl = `/login/core-ntlm?callbackUrl=${encodeURIComponent(absoluteCallback)}&connectorId=${encodeURIComponent(connector.id)}&domain=${encodeURIComponent(connector.coreNtlmDomain || "")}`;
+              this.log(`[BIZGUARD-Auth] No Core NTLM session for ${url}. Redirecting to: ${coreLoginUrl}`, "info");
+              res.writeHead(302, { Location: coreLoginUrl });
+              res.end();
+              return;
+            }
+
             // NTLM sin SSO → formulario de credenciales de red
             const loginUrl = needsSessionForNtlm && !requiresAuth
               ? `/login/ntlm?callbackUrl=${encodeURIComponent(absoluteCallback)}`
@@ -435,6 +457,17 @@ class ProxyManager extends EventEmitter {
 
             this.log(`[BIZGUARD-Auth] No session for ${url}. Redirecting to: ${loginUrl}`, "info");
             res.writeHead(302, { Location: loginUrl });
+            res.end();
+            return;
+          }
+
+          if (needsCoreNtlmSession && connector && !hasCoreNtlmSessionForConnector(session, connector.id)) {
+            const isLocal = hostHeader.includes("localhost") || hostHeader.includes("127.0.0.1");
+            const protocol = isLocal ? "http" : "https";
+            const absoluteCallback = `${protocol}://${hostHeader}${url}`;
+            const coreLoginUrl = `/login/core-ntlm?callbackUrl=${encodeURIComponent(absoluteCallback)}&connectorId=${encodeURIComponent(connector.id)}&domain=${encodeURIComponent(connector.coreNtlmDomain || "")}`;
+            this.log(`[BIZGUARD-Auth] Core NTLM session missing or belongs to another connector for ${url}. Redirecting to: ${coreLoginUrl}`, "info");
+            res.writeHead(302, { Location: coreLoginUrl });
             res.end();
             return;
           }
@@ -619,6 +652,7 @@ class ProxyManager extends EventEmitter {
         cached.connector.connectorType !== connector.connectorType ||
         cached.connector.isNtlm !== connector.isNtlm ||
         cached.connector.ntlmDomain !== connector.ntlmDomain ||
+        cached.connector.coreNtlmDomain !== connector.coreNtlmDomain ||
         cached.connector.entryPath !== connector.entryPath ||
         cached.connector.harLog !== connector.harLog ||
         cached.connector.trafficLog !== connector.trafficLog ||

@@ -42,7 +42,7 @@ export default async function RootLayout({
           {showAdminUI ? (
             <>
               {/* Sidebar Global */}
-              <Sidebar />
+              <Sidebar settings={settings} />
               
               {/* Área principal desplazada a la derecha por el Sidebar fijo (w-48 = 12rem) */}
               <main className="ml-48 flex-1 flex flex-col">

@@ -2,7 +2,8 @@ import fs from 'fs';
 import path from 'path';
 
 // ─── Configuración ────────────────────────────────────────────────────────────
-const TRAFFIC_DIR = path.join(process.cwd(), 'logs', 'traffic');
+const LOGS_ROOT = path.join(process.cwd(), 'logs');
+const TRAFFIC_DIR = path.join(LOGS_ROOT, 'traffic');
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB por chunk
 const DEFAULT_RETENTION_MS = 5 * 60 * 60 * 1000; // 5 horas por defecto
 const CLEANUP_INTERVAL_MS = 10 * 60 * 1000; // cada 10 minutos
@@ -218,56 +219,63 @@ class TrafficLogger {
     this.cleanupTimer.unref(); // No evitar que el proceso termine
   }
 
-  /** Ejecuta la limpieza de archivos antiguos utilizando retención configurable por conector */
+  /** Ejecuta la limpieza de archivos antiguos utilizando retención configurable por conector para todos los tipos de logs */
   private async cleanup(): Promise<void> {
     try {
-      if (!fs.existsSync(TRAFFIC_DIR)) return;
-
       // Importar dinámicamente para evitar problemas de ciclo de carga en Next.js
       const { getConnectors } = await import('./connectors');
       const connectors = await getConnectors();
       const connectorMap = new Map(connectors.map(c => [c.id, c]));
 
-      const connDirs = fs.readdirSync(TRAFFIC_DIR, { withFileTypes: true })
-        .filter(d => d.isDirectory());
+      const logTypes = ['traffic', 'har', 'hb', 'sso'];
 
-      for (const dir of connDirs) {
-        const connectorId = dir.name;
-        const connDirPath = path.join(TRAFFIC_DIR, connectorId);
-        
-        // Obtener la configuración del conector correspondiente
-        const conn = connectorMap.get(connectorId);
-        const retentionMs = calculateRetentionMs(conn?.trafficRetentionValue, conn?.trafficRetentionUnit);
-        const cutoff = Date.now() - retentionMs;
+      for (const logType of logTypes) {
+        const logTypeDir = path.join(LOGS_ROOT, logType);
+        if (!fs.existsSync(logTypeDir)) continue;
 
-        const files = fs.readdirSync(connDirPath);
+        const connDirs = fs.readdirSync(logTypeDir, { withFileTypes: true })
+          .filter(d => d.isDirectory());
 
-        for (const file of files) {
-          const filePath = path.join(connDirPath, file);
-          try {
-            const stat = fs.statSync(filePath);
-            if (stat.mtimeMs < cutoff) {
-              // Cerrar fd si lo tenemos abierto para este conector y es este archivo
-              const state = this.connectorFiles.get(connectorId);
-              if (state && state.filePath === filePath) {
-                try { fs.closeSync(state.fd); } catch {}
-                this.connectorFiles.delete(connectorId);
+        for (const dir of connDirs) {
+          const connectorId = dir.name;
+          const connDirPath = path.join(logTypeDir, connectorId);
+          
+          // Obtener la configuración del conector correspondiente
+          const conn = connectorMap.get(connectorId);
+          const retentionMs = calculateRetentionMs(conn?.trafficRetentionValue, conn?.trafficRetentionUnit);
+          const cutoff = Date.now() - retentionMs;
+
+          const files = fs.readdirSync(connDirPath);
+
+          for (const file of files) {
+            const filePath = path.join(connDirPath, file);
+            try {
+              const stat = fs.statSync(filePath);
+              if (stat.mtimeMs < cutoff) {
+                // Cerrar fd si lo tenemos abierto para este conector y es este archivo (solo aplica a traffic log)
+                if (logType === 'traffic') {
+                  const state = this.connectorFiles.get(connectorId);
+                  if (state && state.filePath === filePath) {
+                    try { fs.closeSync(state.fd); } catch {}
+                    this.connectorFiles.delete(connectorId);
+                  }
+                }
+                fs.unlinkSync(filePath);
               }
-              fs.unlinkSync(filePath);
+            } catch {}
+          }
+
+          // Si la carpeta quedó vacía, eliminarla
+          try {
+            const remaining = fs.readdirSync(connDirPath);
+            if (remaining.length === 0) {
+              fs.rmdirSync(connDirPath);
             }
           } catch {}
         }
-
-        // Si la carpeta quedó vacía, eliminarla
-        try {
-          const remaining = fs.readdirSync(connDirPath);
-          if (remaining.length === 0) {
-            fs.rmdirSync(connDirPath);
-          }
-        } catch {}
       }
     } catch (error: any) {
-      console.error(`[TRAFFIC-LOG-CLEANUP] Error durante limpieza:`, error.message);
+      console.error(`[LOG-CLEANUP] Error durante la limpieza de logs:`, error.message);
     }
   }
 

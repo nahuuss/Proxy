@@ -55,7 +55,8 @@ export function serveAsBlobDownload(
   dataBuffer: Buffer, 
   originalHeaders: http.IncomingHttpHeaders, 
   publicHost: string,
-  isHtmlCommentOpen: boolean
+  isHtmlCommentOpen: boolean,
+  connectorId?: string
 ) {
   const contentType = (originalHeaders['content-type'] || '').split(';')[0].trim() || 'application/octet-stream';
   let mimeType = contentType;
@@ -87,7 +88,7 @@ export function serveAsBlobDownload(
     res.end();
   }
   
-  logHB(`[HB-BLOB] ${Math.round(dataBuffer.length / 1024)}KB via JS Blob: ${filename}`);
+  logHB(connectorId, `[HB-BLOB] ${Math.round(dataBuffer.length / 1024)}KB via JS Blob: ${filename}`);
 }
 
 /**

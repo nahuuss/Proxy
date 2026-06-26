@@ -94,12 +94,14 @@ export function logHarEntry(
   if (!harEnabled) return;
 
   try {
-    // Asegurar existencia del directorio de logs
-    if (!fs.existsSync(LOGS_DIR)) {
-      fs.mkdirSync(LOGS_DIR, { recursive: true });
+    // Asegurar existencia del directorio de logs del conector
+    const connDir = path.join(LOGS_DIR, 'har', connectorId);
+    if (!fs.existsSync(connDir)) {
+      fs.mkdirSync(connDir, { recursive: true });
     }
 
-    const harFile = path.join(LOGS_DIR, `har-${connectorId}.jsonl`);
+    const dp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const harFile = path.join(connDir, `${dp}.jsonl`);
 
     const { startTime, elapsedMs, req, reqBody, resStatusCode, resHeaders, resBody, overrideResBodySize, username } = params;
 

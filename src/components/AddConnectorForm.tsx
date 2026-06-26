@@ -70,6 +70,7 @@ export function AddConnectorForm() {
   const [publicHost, setPublicHost] = useState("");
   const [connectorType, setConnectorType] = useState<string>("generic");
   const [entryPath, setEntryPath] = useState("");
+  const [coreNtlmDomain, setCoreNtlmDomain] = useState("");
   
   const [bypassAuth, setBypassAuth] = useState(false);
   const [isNtlm, setIsNtlm] = useState(false);
@@ -77,6 +78,8 @@ export function AddConnectorForm() {
   
   const [harLog, setHarLog] = useState(false);
   const [trafficLog, setTrafficLog] = useState(false);
+  const [ssoLog, setSsoLog] = useState(false);
+  const [hbLog, setHbLog] = useState(false);
   const [hbFirstPulse, setHbFirstPulse] = useState("");
   const [trafficRetentionValue, setTrafficRetentionValue] = useState("");
   const [trafficRetentionUnit, setTrafficRetentionUnit] = useState("hours");
@@ -124,6 +127,8 @@ export function AddConnectorForm() {
     setConnectorType(val);
     if (val === "dynamics-crm") {
       setIsNtlm(true);
+    } else if (val === "core") {
+      setIsNtlm(false);
     }
   };
 
@@ -345,6 +350,20 @@ export function AddConnectorForm() {
                 type="text"
               />
             </div>
+            {connectorType === "core" && (
+              <div className="space-y-2">
+                <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Dominio NTLM Core</label>
+                <input
+                  name="coreNtlmDomain"
+                  value={coreNtlmDomain}
+                  onChange={e => setCoreNtlmDomain(e.target.value)}
+                  className="w-full bg-surface-container-lowest border border-transparent text-on-surface font-mono text-sm py-3 px-4 rounded-lg focus:border-primary/50 focus:ring-0 placeholder-outline-variant transition-all outline-none"
+                  placeholder="e.g. SERENASEGUROS"
+                  type="text"
+                />
+                <p className="text-[10px] text-on-surface-variant/70">Dominio usado exclusivamente por el flujo NTLM de Core en <code>/LoginExterno.aspx</code>.</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -372,6 +391,8 @@ export function AddConnectorForm() {
               </label>
             </div>
 
+            {connectorType !== "core" && (
+              <>
             {/* NTLM Integration */}
             <div className="flex items-start justify-between p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/10">
               <div className="flex-1 mr-4">
@@ -407,6 +428,8 @@ export function AddConnectorForm() {
                 />
               </div>
             )}
+              </>
+            )}
 
           </div>
         </div>
@@ -438,9 +461,9 @@ export function AddConnectorForm() {
             {/* Traffic & Diagnostic Log */}
             <div className="flex items-start justify-between p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/10">
               <div className="flex-1 mr-4">
-                <p className="font-label text-xs font-bold text-on-surface uppercase tracking-wide">Log de Tráfico y Diagnóstico</p>
+                <p className="font-label text-xs font-bold text-on-surface uppercase tracking-wide">Log de Tráfico</p>
                 <p className="font-body text-[10px] text-on-surface-variant mt-0.5">
-                  Log de tráfico y diagnóstico agrupado por conector en <code className="bg-surface-container px-1 rounded font-mono">logs/traffic/</code>. Rotación automática (100MB) y retención configurable.
+                  Log de tráfico agrupado por conector en <code className="bg-surface-container px-1 rounded font-mono">logs/traffic/</code>. Rotación automática (100MB).
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
@@ -455,12 +478,52 @@ export function AddConnectorForm() {
               </label>
             </div>
 
+            {/* Log de SSO */}
+            <div className="flex items-start justify-between p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/10">
+              <div className="flex-1 mr-4">
+                <p className="font-label text-xs font-bold text-on-surface uppercase tracking-wide">Log de SSO</p>
+                <p className="font-body text-[10px] text-on-surface-variant mt-0.5">
+                  Log de autenticación y redirecciones SSO en la carpeta del conector (<code className="bg-surface-container px-1 rounded font-mono">logs/sso/</code>).
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                <input 
+                  type="checkbox" 
+                  name="ssoLog" 
+                  checked={ssoLog} 
+                  onChange={e => setSsoLog(e.target.checked)} 
+                  className="sr-only peer" 
+                />
+                <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-secondary peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
+              </label>
+            </div>
+
+            {/* Log de Heartbeat */}
+            <div className="flex items-start justify-between p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/10">
+              <div className="flex-1 mr-4">
+                <p className="font-label text-xs font-bold text-on-surface uppercase tracking-wide">Log de Heartbeat</p>
+                <p className="font-body text-[10px] text-on-surface-variant mt-0.5">
+                  Log de mantenimiento de conexión y Shield en la carpeta del conector (<code className="bg-surface-container px-1 rounded font-mono">logs/hb/</code>).
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                <input 
+                  type="checkbox" 
+                  name="hbLog" 
+                  checked={hbLog} 
+                  onChange={e => setHbLog(e.target.checked)} 
+                  className="sr-only peer" 
+                />
+                <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-secondary peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
+              </label>
+            </div>
+
             {/* Tiempo de Retención */}
             <div className="flex items-start justify-between p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/10">
               <div className="flex-1 mr-4">
                 <p className="font-label text-xs font-bold text-on-surface uppercase tracking-wide">Tiempo de Retención de Logs</p>
                 <p className="font-body text-[10px] text-on-surface-variant mt-0.5">
-                  Especifica durante cuánto tiempo se almacenarán los logs de tráfico antes de eliminarse automáticamente. Deja vacío para usar el valor por defecto (5 horas).
+                  Especifica durante cuánto tiempo se almacenarán todos los logs del conector (Tráfico, HAR, SSO, Heartbeat) antes de eliminarse automáticamente. Deja vacío para usar el valor por defecto (5 horas).
                 </p>
               </div>
               <div className="flex gap-2 shrink-0 mt-0.5 w-[200px]">

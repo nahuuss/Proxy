@@ -98,8 +98,11 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
   const [isEditing, setIsEditing] = useState(false);
   const [selectedType, setSelectedType] = useState<'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test'>(connector.connectorType || 'generic');
   const [ntlmEnabled, setNtlmEnabled] = useState(connector.isNtlm === true);
+  const [coreNtlmDomain, setCoreNtlmDomain] = useState(connector.coreNtlmDomain || "");
   const [harLog, setHarLog] = useState(connector.harLog === true);
   const [trafficLog, setTrafficLog] = useState(connector.trafficLog === true);
+  const [ssoLog, setSsoLog] = useState(connector.ssoLog === true);
+  const [hbLog, setHbLog] = useState(connector.hbLog === true);
   const [hbFirstPulse, setHbFirstPulse] = useState(connector.hbFirstPulse !== undefined ? String(connector.hbFirstPulse) : "");
   const [trafficRetentionValue, setTrafficRetentionValue] = useState(connector.trafficRetentionValue !== undefined ? String(connector.trafficRetentionValue) : "");
   const [trafficRetentionUnit, setTrafficRetentionUnit] = useState(connector.trafficRetentionUnit || "hours");
@@ -107,6 +110,7 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
   const handleTypeChange = (type: string) => {
     setSelectedType(type as 'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test');
     if (type === 'dynamics-crm') setNtlmEnabled(true);
+    if (type === 'core') setNtlmEnabled(false);
   };
   const { connectors } = useStats();
   const stats = connectors[connector.id] || connector.stats || { requests: 0, bytes: 0, latency: 0, activePing: undefined, isOnline: undefined };
@@ -155,7 +159,7 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
     { id: 'general' as const,     label: 'General',   badge: null },
     { id: 'producto' as const,    label: 'Producto',  badge: selectedType !== 'generic' ? selectedType === 'dynamics-crm' ? 'CRM' : selectedType.charAt(0).toUpperCase() + selectedType.slice(1) : null },
     { id: 'seguridad' as const,   label: 'Seguridad', badge: (bypassAuth || ntlmEnabled) ? '!' : null },
-    { id: 'diagnostico' as const, label: 'Diagnóstico', badge: trafficLog ? 'TRF' : harLog ? 'HAR' : null },
+    { id: 'diagnostico' as const, label: 'Diagnóstico', badge: (trafficLog || harLog || ssoLog || hbLog) ? 'LOGS' : null },
   ];
 
   const editModal = isEditing ? createPortal(
@@ -260,6 +264,19 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
 
             <div className={`px-6 py-5 space-y-4 ${activeTab === 'producto' ? '' : 'hidden'}`}>
               <ConnectorTypeSection connectorType={selectedType} onChange={handleTypeChange} />
+              <div className={selectedType === 'core' ? '' : 'hidden'}>
+                <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Dominio NTLM Core</label>
+                <input
+                  name="coreNtlmDomain"
+                  value={coreNtlmDomain}
+                  onChange={e => setCoreNtlmDomain(e.target.value)}
+                  placeholder="DOMINIO"
+                  className="w-full bg-surface-container-lowest border border-transparent text-on-surface text-sm py-3 px-4 rounded-lg focus:border-primary/50 outline-none mt-1"
+                />
+                <p className="font-body text-[10px] text-on-surface-variant mt-1.5">
+                  Dominio usado exclusivamente por el login NTLM de Core en <code className="bg-surface-container px-1 rounded">/LoginExterno.aspx</code>.
+                </p>
+              </div>
               <div className={selectedType === 'dynamics-crm' ? '' : 'hidden'}>
                 <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Ruta de organización</label>
                 <input name="entryPath" defaultValue={connector.entryPath || ""} placeholder="/NOMBREORG/" className="w-full bg-surface-container-lowest border border-transparent text-on-surface text-sm py-3 px-4 rounded-lg focus:border-primary/50 outline-none mt-1" />
@@ -282,8 +299,9 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
                   <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-error peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
                 </label>
               </div>
-              {/* NTLM */}
-              <DynamicsCrmSection ntlmEnabled={ntlmEnabled} onNtlmChange={setNtlmEnabled} ntlmDomain={connector.ntlmDomain} />
+              {selectedType !== 'core' && (
+                <DynamicsCrmSection ntlmEnabled={ntlmEnabled} onNtlmChange={setNtlmEnabled} ntlmDomain={connector.ntlmDomain} />
+              )}
             </div>
 
             <div className={`px-6 py-5 space-y-5 ${activeTab === 'diagnostico' ? '' : 'hidden'}`}>
@@ -322,13 +340,46 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
                       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                     </svg>
                     <div className="flex-1">
-                      <p className="font-label text-xs font-bold text-on-surface uppercase tracking-wide">Log de Tráfico y Diagnóstico</p>
+                      <p className="font-label text-xs font-bold text-on-surface uppercase tracking-wide">Log de Tráfico</p>
                       <p className="font-body text-[10px] text-on-surface-variant mt-0.5">
-                        Log de tráfico y trazas de diagnóstico agrupadas por conector en <code className="bg-surface-container px-1 rounded font-mono">logs/traffic/</code>. Rotación de 100 MB y retención configurable. Incluye cookies, headers y eventos.
+                        Log de tráfico agrupado por conector en <code className="bg-surface-container px-1 rounded font-mono">logs/traffic/{connector.id}/</code>. Rotación de 100 MB. Incluye cookies, headers y eventos de debug.
                       </p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
                       <input type="checkbox" name="trafficLog" checked={trafficLog} onChange={e => setTrafficLog(e.target.checked)} className="sr-only peer" />
+                      <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-primary peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
+                    </label>
+                  </div>
+
+                  {/* Log de SSO */}
+                  <div className="flex items-start gap-4 p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/10">
+                    <svg className="w-5 h-5 text-on-surface-variant shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                    <div className="flex-1">
+                      <p className="font-label text-xs font-bold text-on-surface uppercase tracking-wide">Log de SSO</p>
+                      <p className="font-body text-[10px] text-on-surface-variant mt-0.5">
+                        Escribe un log de autenticación y redirecciones SSO en <code className="bg-surface-container px-1 rounded font-mono">logs/sso/{connector.id}/</code>.
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                      <input type="checkbox" name="ssoLog" checked={ssoLog} onChange={e => setSsoLog(e.target.checked)} className="sr-only peer" />
+                      <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-primary peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
+                    </label>
+                  </div>
+
+                  {/* Log de Heartbeat */}
+                  <div className="flex items-start gap-4 p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/10">
+                    <Activity className="w-5 h-5 text-on-surface-variant shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-label text-xs font-bold text-on-surface uppercase tracking-wide">Log de Heartbeat</p>
+                      <p className="font-body text-[10px] text-on-surface-variant mt-0.5">
+                        Escribe un log de mantenimiento de conexión y Shield en <code className="bg-surface-container px-1 rounded font-mono">logs/hb/{connector.id}/</code>.
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                      <input type="checkbox" name="hbLog" checked={hbLog} onChange={e => setHbLog(e.target.checked)} className="sr-only peer" />
                       <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-primary peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
                     </label>
                   </div>
@@ -338,7 +389,7 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
                     <div className="flex-1">
                       <p className="font-label text-xs font-bold text-on-surface uppercase tracking-wide">Tiempo de Retención de Logs</p>
                       <p className="font-body text-[10px] text-on-surface-variant mt-0.5">
-                        Especifica durante cuánto tiempo se almacenarán los logs de tráfico antes de eliminarse automáticamente. Deja vacío para usar el valor por defecto (5 horas).
+                        Especifica durante cuánto tiempo se almacenarán todos los logs del conector (Tráfico, HAR, SSO, Heartbeat) antes de eliminarse automáticamente. Deja vacío para usar el valor por defecto (5 horas).
                       </p>
                     </div>
                     <div className="flex gap-2 shrink-0 mt-0.5 w-[200px]">
@@ -462,6 +513,12 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
             )}
             {connector.harLog && (
               <span className="text-[8px] font-bold text-secondary uppercase tracking-tighter ml-1 bg-secondary/15 px-1 rounded" title="HAR Debug Activo">HAR</span>
+            )}
+            {connector.ssoLog && (
+              <span className="text-[8px] font-bold text-primary uppercase tracking-tighter ml-1 bg-primary/15 px-1 rounded" title="Log SSO Activo">SSO</span>
+            )}
+            {connector.hbLog && (
+              <span className="text-[8px] font-bold text-tertiary uppercase tracking-tighter ml-1 bg-tertiary/15 px-1 rounded" title="Log HB Activo">HB</span>
             )}
           </div>
         </div>
