@@ -1,5 +1,19 @@
 # Script de Preparacion de Paquete Offline (Power-Pack BizGuard ENTERPRISE)
-# Correr en Windows PowerShell
+# Correr en Windows PowerShell powershell.exe -ExecutionPolicy Bypass -File "E:\Desarrollo\BizGuard\preparar-despliegue.ps1"
+#powershell.exe -ExecutionPolicy Bypass -File "E:\Desarrollo\BizGuard\preparar-despliegue.ps1"
+$scriptRoot = if ($PSScriptRoot) {
+    $PSScriptRoot
+} else {
+    Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+
+if (-not $scriptRoot -or -not (Test-Path (Join-Path $scriptRoot "package.json"))) {
+    Write-Host "ERROR CRITICO: No se encontro package.json junto al script de despliegue." -ForegroundColor Red
+    Write-Host "Ejecuta este script desde la carpeta raiz del proyecto BizGuard." -ForegroundColor Yellow
+    exit 1
+}
+
+Set-Location -Path $scriptRoot
 
 $dist = "BizGuard"
 $version = "v1.2.2-Enterprise"
@@ -18,7 +32,7 @@ if (Test-Path ".next") {
 }
 
 Write-Host "[2/6] Compilando aplicacion Next.js (npm run build)..."
-npm run build
+& npm.cmd run build
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR CRITICO: La compilacion fallo. Abortando." -ForegroundColor Red
     exit $LASTEXITCODE
@@ -54,6 +68,7 @@ if (Test-Path "data") {
 if (Test-Path ".env.local") {
     Copy-Item -Path ".env.local" -Destination "$dist/.env" -Force
 }
+
 
 # 4. ENTREGA ENTERPRISE: Documentación y SQL
 Write-Host "[6/6] Incluyendo documentacion Enterprise (context/sql)..."

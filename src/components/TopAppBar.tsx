@@ -1,3 +1,5 @@
+import { User } from "lucide-react";
+
 export function TopAppBar({ email }: { email?: string | null }) {
   return (
     <header className="flex justify-between items-center w-full px-5 h-12 sticky top-0 z-40 bg-background border-b border-outline-variant/10">
@@ -15,8 +17,8 @@ export function TopAppBar({ email }: { email?: string | null }) {
             <p className="text-xs font-bold text-on-surface leading-none">{email || "Local Admin"}</p>
             <p className="text-[10px] text-on-surface-variant">Session: Active</p>
           </div>
-          <div className="w-8 h-8 rounded-full border border-outline-variant/30 bg-surface-container-highest flex items-center justify-center text-on-surface-variant overflow-hidden">
-            <span className="material-symbols-outlined text-base">person</span>
+          <div className="w-8 h-8 rounded-full border border-outline-variant/30 bg-gradient-to-br from-surface-container-highest to-surface-container-low flex items-center justify-center text-on-surface shadow-[0_6px_18px_rgba(0,0,0,0.22)] overflow-hidden">
+            <User className="w-4 h-4" strokeWidth={2.2} />
           </div>
         </div>
       </div>

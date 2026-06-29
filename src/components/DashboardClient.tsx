@@ -1,17 +1,26 @@
-"use client"
+"use client";
 
-// BizGuard Dashboard Client v1.2.1 - Cache Force Refresh
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Connector } from "@/lib/connectors";
 import { ConnectorRow } from "@/components/ConnectorRow";
 import { GlobalConsole } from "@/components/GlobalConsole";
 import { GlobalMetricsSummary } from "@/components/GlobalMetricsSummary";
 import { useStats } from "@/contexts/StatsContext";
-import { LayoutGrid, List } from "lucide-react";
+import { LayoutGrid, List, RefreshCw } from "lucide-react";
 
-export function DashboardClient({ initialConnectors }: { initialConnectors: Connector[] }) {
+export function DashboardClient({
+  initialConnectors,
+  dashboardHost,
+  dashboardProtocol,
+}: {
+  initialConnectors: Connector[];
+  dashboardHost: string;
+  dashboardProtocol: "http" | "https";
+}) {
   const [selectedConnectorId, setSelectedConnectorId] = useState<string | null>(null);
   const { connectors, metrics } = useStats();
+  const [timeRemaining, setTimeRemaining] = useState<string>("--:--");
+  const [isResetting, setIsResetting] = useState(false);
 
   const displayConnectors = initialConnectors.map(c => ({
     ...c,
@@ -24,6 +33,44 @@ export function DashboardClient({ initialConnectors }: { initialConnectors: Conn
   const avgLatency = activePings.length > 0 
     ? Math.round(activePings.reduce((a, b) => a + b, 0) / activePings.length) 
     : 0;
+
+  const nextReset = metrics.nextMemoryReset || 0;
+
+  useEffect(() => {
+    const updateTimer = () => {
+      if (!nextReset) {
+        setTimeRemaining("--:--");
+        return;
+      }
+      const diff = nextReset - Date.now();
+      if (diff <= 0) {
+        setTimeRemaining("00:00");
+      } else {
+        const minutes = Math.floor(diff / 60000);
+        const seconds = Math.floor((diff % 60000) / 1000);
+        setTimeRemaining(`${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`);
+      }
+    };
+    updateTimer();
+    const iv = setInterval(updateTimer, 1000);
+    return () => clearInterval(iv);
+  }, [nextReset]);
+
+  const handleManualReset = async () => {
+    if (isResetting) return;
+    setIsResetting(true);
+    try {
+      const res = await fetch("/api/memory/reset", { method: "POST" });
+      if (res.ok) {
+        // Forzar actualización inmediata llamando a stats
+        await fetch("/api/stats");
+      }
+    } catch (e) {
+      console.error("Error al forzar reset de memoria:", e);
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -51,7 +98,12 @@ export function DashboardClient({ initialConnectors }: { initialConnectors: Conn
               onClick={() => setSelectedConnectorId(connector.id === selectedConnectorId ? null : connector.id)}
               className={`cursor-pointer transition-all duration-300 ${selectedConnectorId === connector.id ? 'ring-2 ring-primary/30 rounded-lg translate-x-1' : ''}`}
             >
-              <ConnectorRow connector={connector} isSelected={selectedConnectorId === connector.id} />
+              <ConnectorRow
+                connector={connector}
+                isSelected={selectedConnectorId === connector.id}
+                dashboardHost={dashboardHost}
+                dashboardProtocol={dashboardProtocol}
+              />
             </div>
           ))}
           {displayConnectors.length === 0 && (
@@ -84,9 +136,29 @@ export function DashboardClient({ initialConnectors }: { initialConnectors: Conn
         </section>
 
         <section className="space-y-3">
-          <div className="px-1">
-            <h2 className="font-headline text-[13px] font-bold text-on-surface uppercase tracking-tighter text-secondary">BizGuard Performance</h2>
-            <p className="font-body text-[9px] text-on-surface-variant/60">Real-time health & load metrics</p>
+          <div className="flex justify-between items-center px-1">
+            <div>
+              <h2 className="font-headline text-[13px] font-bold text-on-surface uppercase tracking-tighter text-secondary">BizGuard Performance</h2>
+              <p className="font-body text-[9px] text-on-surface-variant/60">Real-time health & load metrics</p>
+            </div>
+            
+            {/* GC Rescheduling controls */}
+            <div className="flex items-center gap-2.5 bg-surface-container-low/75 border border-white/5 rounded-lg px-2.5 py-1.5 shadow-inner text-[10px] text-on-surface-variant">
+              <div className="flex flex-col text-right">
+                <span className="font-semibold text-secondary font-mono text-[11px] leading-tight">{timeRemaining}</span>
+                <span className="text-[7px] uppercase tracking-wider text-on-surface-variant/50">Próx. Reset</span>
+              </div>
+              <div className="h-5 w-[1px] bg-white/10"></div>
+              <button 
+                onClick={handleManualReset}
+                disabled={isResetting}
+                className={`flex items-center gap-1 px-2 py-1 rounded bg-secondary/10 hover:bg-secondary/20 disabled:opacity-50 active:scale-95 transition-all text-secondary font-semibold text-[8px] uppercase tracking-wider ${isResetting ? 'cursor-not-allowed' : ''}`}
+                title="Forzar liberación de memoria y compactación"
+              >
+                <RefreshCw size={10} className={isResetting ? "animate-spin" : ""} />
+                {isResetting ? "Limpiando..." : "Reset"}
+              </button>
+            </div>
           </div>
           <GlobalMetricsSummary 
             avgLatency={avgLatency}
@@ -94,6 +166,10 @@ export function DashboardClient({ initialConnectors }: { initialConnectors: Conn
             cpuLoad={metrics.cpuLoad}
             memUsage={metrics.memUsage}
             activeHeartbeats={metrics.activeHeartbeats}
+            nodeMemUsage={metrics.nodeMemUsage}
+            nodeMemPercent={metrics.nodeMemPercent}
+            lastMemoryReset={metrics.lastMemoryReset}
+            nextMemoryReset={metrics.nextMemoryReset}
           />
         </section>
       </div>

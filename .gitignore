@@ -16,9 +16,12 @@
 # next.js
 /.next/
 /out/
+/.next_old/
+/BizGuard/.next/
 
 # production
 /build
+/BizGuard.zip
 
 # misc
 .DS_Store
@@ -39,3 +42,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# logs
+/logs/
+/logsdebug/
+/BizGuard/logs/

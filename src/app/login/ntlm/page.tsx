@@ -7,6 +7,7 @@ import { ntlmSignIn } from "./actions";
 function NtlmLoginForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams?.get("callbackUrl") || "/";
+  const connectorId = searchParams?.get("connectorId") || "";
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -19,7 +20,7 @@ function NtlmLoginForm() {
     const password = (form.elements.namedItem("password") as HTMLInputElement).value;
     const domain = (form.elements.namedItem("domain") as HTMLInputElement).value;
 
-    const result = await ntlmSignIn(username, password, domain);
+    const result = await ntlmSignIn(username, password, domain, connectorId);
 
     if (result.ok) {
       window.location.href = callbackUrl;
@@ -36,16 +37,16 @@ function NtlmLoginForm() {
           <div style={{ width: "48px", height: "48px", background: "#EFF6FF", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
           </div>
-          <h2 style={{ margin: 0, fontSize: "20px", fontWeight: 700, color: "#111" }}>Acceso al Sistema</h2>
+          <h2 style={{ margin: 0, fontSize: "20px", fontWeight: 700, color: "#111" }}>Acceso a CRM</h2>
           <p style={{ margin: "6px 0 0", fontSize: "13px", color: "#374151" }}>Ingresa tus credenciales de red</p>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
-            <label style={{ display: "block", fontSize: "12px", color: "#1E3A5F", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Usuario</label>
+            <label style={{ display: "block", fontSize: "12px", color: "#1E3A5F", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Legajo</label>
             <input name="username" type="text" autoComplete="username" autoFocus required
               style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #93C5FD", borderRadius: "8px", fontSize: "14px", outline: "none", boxSizing: "border-box", color: "#111827", backgroundColor: "#F0F7FF" }}
-              placeholder="usuario.nombre" />
+              placeholder="XXXXXX" />
           </div>
 
           <div>
@@ -55,11 +56,8 @@ function NtlmLoginForm() {
               placeholder="••••••••" />
           </div>
 
-          <div>
-            <label style={{ display: "block", fontSize: "12px", color: "#1E3A5F", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Dominio</label>
-            <input name="domain" type="text" defaultValue="SERENASEGUROS"
-              style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #93C5FD", borderRadius: "8px", fontSize: "14px", outline: "none", boxSizing: "border-box", color: "#111827", backgroundColor: "#F0F7FF" }} />
-          </div>
+          {/* Campo dominio oculto para mantener lógica de autenticación sin mostrarlo en UI */}
+          <input name="domain" type="hidden" defaultValue="SERENASEGUROS" />
 
           {error && <p style={{ margin: 0, color: "#DC2626", fontSize: "13px", textAlign: "center" }}>{error}</p>}
 

@@ -19,6 +19,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   
   const headersList = await headers();
   const host = headersList.get("host") || "";
+  const forwardedProto = headersList.get("x-forwarded-proto") || "";
+  const dashboardProtocol = host.includes("localhost") || host.includes("127.0.0.1")
+    ? "http"
+    : ((forwardedProto === "http" || forwardedProto === "https") ? forwardedProto : "https");
   if (host.includes(":3000")) {
     isBypass = true;
   }
@@ -53,7 +57,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       </section>
 
       {/* Main Interactive Dashboard Area */}
-      <DashboardClient initialConnectors={rawConnectors} />
+      <DashboardClient
+        initialConnectors={rawConnectors}
+        dashboardHost={host}
+        dashboardProtocol={dashboardProtocol}
+      />
       
     </div>
   );

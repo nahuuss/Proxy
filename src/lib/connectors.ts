@@ -1,6 +1,7 @@
-import { connectorsDb } from './db';
+import { connectorsDb, isBuildPhase } from './db';
 import fs from 'fs/promises';
 import path from 'path';
+import { buildDefaultProductConfig, ConnectorProductType, normalizeConnectorProductType, ProductConfig } from './product-catalog';
 
 export interface Connector {
   id: string;
@@ -13,10 +14,19 @@ export interface Connector {
   bypassAuth?: boolean;
   strictTls?: boolean;
   hbForceUrls?: string[];
-  connectorType?: 'generic' | 'dynamics-crm' | 'core' | 'bank';
+  connectorType?: ConnectorProductType;
+  productConfig?: ProductConfig;
   isNtlm?: boolean;
   ntlmDomain?: string;
+  coreNtlmDomain?: string;
   entryPath?: string;
+  harLog?: boolean; // Si true, escribe un log tipo HAR en logs/har/{id}/YYYY-MM-DD.jsonl
+  trafficLog?: boolean; // Si true, escribe un log de tráfico en logs/traffic/{id}/
+  ssoLog?: boolean; // Si true, escribe un log de SSO en logs/sso/{id}/YYYY-MM-DD.log
+  hbLog?: boolean; // Si true, escribe un log de Heartbeat en logs/hb/{id}/YYYY-MM-DD.log
+  hbFirstPulse?: number; // Umbral opcional de activación del heartbeat en segundos
+  trafficRetentionValue?: number; // Valor de retención de logs de tráfico
+  trafficRetentionUnit?: 'seconds' | 'minutes' | 'hours' | 'days'; // Unidad de retención de logs de tráfico
   stats?: {
     requests: number;
     bytes: number;
@@ -32,6 +42,7 @@ let migrationPromise: Promise<void> | null = null;
 
 // Migración inicial de JSON a NeDB (solo si la DB está vacía)
 async function migrateIfNeeded() {
+  if (isBuildPhase()) return;
   try {
     const count = await connectorsDb.countAsync({});
     if (count === 0) {
@@ -53,6 +64,7 @@ if (!migrationPromise) {
 }
 
 export async function getConnectors(): Promise<Connector[]> {
+  if (isBuildPhase()) return [];
   if (migrationPromise) await migrationPromise;
   
   // Forzar recarga desde disco para evitar datos cacheados obsoletos en modo multi-worker de Next.js
@@ -60,26 +72,50 @@ export async function getConnectors(): Promise<Connector[]> {
     await connectorsDb.loadDatabaseAsync();
   } catch(e) { /* ignorar ENOENT de concurrencia */ }
   
-  return (await connectorsDb.findAsync({})) as unknown as Connector[];
+  const connectors = (await connectorsDb.findAsync({})) as unknown as Connector[];
+  return connectors.map(normalizeConnector);
 }
 
 export async function addConnector(connector: Omit<Connector, 'isActive'>) {
-  const newConnector: Connector = { ...connector, isActive: true };
+  const newConnector: Connector = normalizeConnector({ ...connector, isActive: true });
   await connectorsDb.insertAsync(newConnector);
   return newConnector;
 }
 
 export async function getConnectorById(id: string): Promise<Connector | undefined> {
+  if (isBuildPhase()) return undefined;
   try { await connectorsDb.loadDatabaseAsync(); } catch(e) {}
   const connector = await connectorsDb.findOneAsync({ id });
-  return (connector as unknown as Connector) || undefined;
+  return connector ? normalizeConnector(connector as unknown as Connector) : undefined;
 }
 
 export async function updateConnector(id: string, updates: Partial<Omit<Connector, 'id'>>) {
-  await connectorsDb.updateAsync({ id }, { $set: updates }, {});
+  const current = await getConnectorById(id);
+  const normalizedUpdates = current ? normalizeConnector({ ...current, ...updates, id }) : updates;
+  await connectorsDb.updateAsync({ id }, { $set: normalizedUpdates }, {});
   return await getConnectorById(id);
 }
 
 export async function deleteConnector(id: string) {
   await connectorsDb.removeAsync({ id }, {});
+}
+
+function normalizeConnector(connector: Connector): Connector {
+  const connectorType = normalizeConnectorProductType(connector.connectorType);
+  return {
+    ...connector,
+    connectorType,
+    productConfig: normalizeProductConfig(connector.productConfig, connectorType),
+  };
+}
+
+function normalizeProductConfig(productConfig: ProductConfig | undefined, connectorType: ConnectorProductType): ProductConfig {
+  return {
+    ...buildDefaultProductConfig(connectorType),
+    ...(productConfig || {}),
+    [connectorType]: {
+      ...buildDefaultProductConfig(connectorType)[connectorType],
+      ...(productConfig?.[connectorType] || {}),
+    },
+  };
 }

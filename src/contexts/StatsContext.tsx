@@ -21,6 +21,10 @@ interface SystemMetrics {
   cpuLoad: number;
   memUsage: number;
   activeHeartbeats: number;
+  nodeMemUsage?: number;
+  nodeMemPercent?: number;
+  lastMemoryReset?: number;
+  nextMemoryReset?: number;
 }
 
 interface CombinedStats {
@@ -32,14 +36,14 @@ interface CombinedStats {
 const StatsContext = createContext<CombinedStats>({ 
   connectors: {}, 
   pings: {},
-  metrics: { throughput: 0, cpuLoad: 0, memUsage: 0, activeHeartbeats: 0 }
+  metrics: { throughput: 0, cpuLoad: 0, memUsage: 0, activeHeartbeats: 0, nodeMemUsage: 0, nodeMemPercent: 0, lastMemoryReset: 0, nextMemoryReset: 0 }
 });
 
 export function StatsProvider({ children }: { children: React.ReactNode }) {
   const [stats, setStats] = useState<CombinedStats>({ 
     connectors: {}, 
     pings: {},
-    metrics: { throughput: 0, cpuLoad: 0, memUsage: 0, activeHeartbeats: 0 }
+    metrics: { throughput: 0, cpuLoad: 0, memUsage: 0, activeHeartbeats: 0, nodeMemUsage: 0, nodeMemPercent: 0, lastMemoryReset: 0, nextMemoryReset: 0 }
   });
   
   const lastUpdateRef = useRef<number>(Date.now());

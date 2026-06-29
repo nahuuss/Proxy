@@ -6,10 +6,12 @@ import net from "net";
 import tls from "tls";
 import os from "os";
 import { EventEmitter } from "events";
-import { getSettings } from "./settings";
+import { getSettings, GlobalSettings } from "./settings";
 import { decode } from "@auth/core/jwt";
 import fs from "fs";
 import path from "path";
+import { getLastCompactionTime, getCurrentCompactionIntervalMs } from "./db";
+import { hasCoreNtlmSessionForConnector, isCoreNtlmPath } from "./core-ntlm";
 
 declare global {
   var proxyManager: ProxyManager | undefined;
@@ -79,7 +81,7 @@ const rateLimiter = new RateLimiter();
 
 class ProxyManager extends EventEmitter {
   private servers: Map<number, http.Server> = new Map();
-  private proxyServers: Map<string, ReturnType<typeof createProxyServer>> = new Map();
+  private proxyServers: Map<string, { server: ReturnType<typeof createProxyServer>; connector: Connector }> = new Map();
   private stats: Map<string, { requests: number, bytes: number, latency?: number, activePing?: number, isOnline?: boolean }> = new Map();
   private pingStats: Record<string, number> = {};
   private statsPending = false;
@@ -93,7 +95,11 @@ class ProxyManager extends EventEmitter {
     throughput: 0, // MB/s
     cpuLoad: 0,    // %
     memUsage: 0,   // %
-    activeHeartbeats: 0 // HB Shield activos
+    activeHeartbeats: 0, // HB Shield activos
+    nodeMemUsage: 0, // Consumo en MB de Node.js
+    nodeMemPercent: 0, // Porcentaje de RAM total consumida por Node.js
+    lastMemoryReset: Date.now(),
+    nextMemoryReset: Date.now() + getCurrentCompactionIntervalMs()
   };
 
   // Contador público de heartbeats activos (accesible desde proxy-server)
@@ -151,6 +157,13 @@ class ProxyManager extends EventEmitter {
       const freeMem = os.freemem();
       this.globalMetrics.memUsage = ((totalMem - freeMem) / totalMem) * 100;
 
+      // CÁLCULO MEMORIA NODE Y RESET DATA
+      const rssMb = process.memoryUsage().rss / 1024 / 1024;
+      this.globalMetrics.nodeMemUsage = rssMb;
+      this.globalMetrics.nodeMemPercent = totalMem > 0 ? (process.memoryUsage().rss / totalMem) * 100 : 0;
+      this.globalMetrics.lastMemoryReset = getLastCompactionTime();
+      this.globalMetrics.nextMemoryReset = getLastCompactionTime() + getCurrentCompactionIntervalMs();
+
       // HEARTBEAT SHIELD COUNTER
       this.globalMetrics.activeHeartbeats = this.heartbeatCount;
 
@@ -181,7 +194,7 @@ class ProxyManager extends EventEmitter {
           fs.rename(fp + '.tmp', fp, () => { this.syncInFlight = false; });
         });
       }
-    }, 500);
+    }, 5000);
 
     this.pingAll();
     setInterval(() => this.pingAll(), 15000);
@@ -360,10 +373,22 @@ class ProxyManager extends EventEmitter {
       const currentConnectors = (await getConnectors()).filter(c => c.port === port);
       const settings = await getSettings();
 
-      if (url.startsWith("/api/auth") || url.startsWith("/api/stats") || url.startsWith("/login") || url.includes("_next") || url.includes("favicon")) {
+      // Rutas internas de BizGuard: solo las rutas exactas del dashboard/auth,
+      // NO usar startsWith("/login") a secas porque captura URLs del backend como /loginexterno.aspx
+      const urlPath = url.split("?")[0].toLowerCase();
+      const isInternalRoute = url.startsWith("/api/auth") ||
+        url.startsWith("/api/stats") ||
+        url.includes("_next") ||
+        url.includes("favicon") ||
+        urlPath === "/login" ||
+        urlPath.startsWith("/login/");
+      if (isInternalRoute) {
         const DASH_ID = "internal-dashboard";
+        const isLocalDashboardHost = hostHeader.includes("localhost") || hostHeader.includes("127.0.0.1");
+        req.headers["x-forwarded-host"] = hostHeader;
+        req.headers["x-forwarded-proto"] = isLocalDashboardHost ? "http" : "https";
         if (!this.proxyServers.has(DASH_ID)) {
-          this.proxyServers.set(DASH_ID, createProxyServer({
+          const dashConnector = {
             id: DASH_ID,
             name: "Internal BizGuard Dashboard",
             description: "Maneja autenticación y recursos estáticos internamente",
@@ -371,9 +396,13 @@ class ProxyManager extends EventEmitter {
             targetUrl: "http://127.0.0.1:3000",
             publicHost: hostHeader,
             isActive: true
-          }, () => {}));
+          };
+          this.proxyServers.set(DASH_ID, {
+            server: createProxyServer(dashConnector, () => {}, 20000),
+            connector: dashConnector
+          });
         }
-        (this.proxyServers.get(DASH_ID) as any).emit("request", req, res);
+        (this.proxyServers.get(DASH_ID)!.server as any).emit("request", req, res);
         return;
       }
 
@@ -403,8 +432,9 @@ class ProxyManager extends EventEmitter {
       // NTLM siempre necesita sesión para obtener credenciales, aunque bypassAuth esté activo.
       // dynamics-crm implica NTLM aunque isNtlm no esté seteado explícitamente en DB.
       const needsSessionForNtlm = connector?.isNtlm === true || connector?.connectorType === 'dynamics-crm';
+      const needsCoreNtlmSession = connector?.connectorType === 'core' && isCoreNtlmPath(url);
 
-      if (requiresAuth || needsSessionForNtlm) {
+      if (requiresAuth || needsSessionForNtlm || needsCoreNtlmSession) {
         try {
           const session = await verifySession(req.headers.cookie || "");
           (req as any).session = session;
@@ -422,11 +452,22 @@ class ProxyManager extends EventEmitter {
             const protocol = isLocal ? "http" : "https";
             // Si el conector tiene entryPath y el usuario visita /, usar entryPath como destino post-login
             const targetPath = (url === '/' && connector?.entryPath) ? connector.entryPath : url;
+            // callbackUrl debe reflejar el origen exacto con el que entró el usuario.
+            // auth.ts puede corregir hosts internos, pero no debe canonizar este valor
+            // a publicHost cuando el acceso real fue por localhost.
             const absoluteCallback = `${protocol}://${hostHeader}${targetPath}`;
+
+            if (needsCoreNtlmSession && connector) {
+              const coreLoginUrl = `/login/core-ntlm?callbackUrl=${encodeURIComponent(absoluteCallback)}&connectorId=${encodeURIComponent(connector.id)}&domain=${encodeURIComponent(connector.coreNtlmDomain || "")}`;
+              this.log(`[BIZGUARD-Auth] No Core NTLM session for ${url}. Redirecting to: ${coreLoginUrl}`, "info");
+              res.writeHead(302, { Location: coreLoginUrl });
+              res.end();
+              return;
+            }
 
             // NTLM sin SSO → formulario de credenciales de red
             const loginUrl = needsSessionForNtlm && !requiresAuth
-              ? `/login/ntlm?callbackUrl=${encodeURIComponent(absoluteCallback)}`
+              ? `/login/ntlm?callbackUrl=${encodeURIComponent(absoluteCallback)}&connectorId=${encodeURIComponent(connector?.id || "")}`
               : `/api/auth/signin?callbackUrl=${encodeURIComponent(absoluteCallback)}`;
 
             this.log(`[BIZGUARD-Auth] No session for ${url}. Redirecting to: ${loginUrl}`, "info");
@@ -435,15 +476,26 @@ class ProxyManager extends EventEmitter {
             return;
           }
 
+          if (needsCoreNtlmSession && connector && !hasCoreNtlmSessionForConnector(session, connector.id)) {
+            const isLocal = hostHeader.includes("localhost") || hostHeader.includes("127.0.0.1");
+            const protocol = isLocal ? "http" : "https";
+            const absoluteCallback = `${protocol}://${hostHeader}${url}`;
+            const coreLoginUrl = `/login/core-ntlm?callbackUrl=${encodeURIComponent(absoluteCallback)}&connectorId=${encodeURIComponent(connector.id)}&domain=${encodeURIComponent(connector.coreNtlmDomain || "")}`;
+            this.log(`[BIZGUARD-Auth] Core NTLM session missing or belongs to another connector for ${url}. Redirecting to: ${coreLoginUrl}`, "info");
+            res.writeHead(302, { Location: coreLoginUrl });
+            res.end();
+            return;
+          }
+
           // Sesión SSO activa pero NTLM también requerido y sin credenciales CRM → pedir NTLM
-          if (needsSessionForNtlm && !session.crmUser) {
+          if (needsSessionForNtlm && (!session.crmUser || session.crmConnectorId !== connector?.id)) {
             if (!url.startsWith('/api/') || url.startsWith('/api/auth')) {
               const isLocal = hostHeader.includes("localhost") || hostHeader.includes("127.0.0.1");
               const protocol = isLocal ? "http" : "https";
               const targetPath = (url === '/' && connector?.entryPath) ? connector.entryPath : url;
               const absoluteCallback = `${protocol}://${hostHeader}${targetPath}`;
-              const ntlmUrl = `/login/ntlm?callbackUrl=${encodeURIComponent(absoluteCallback)}`;
-              this.log(`[BIZGUARD-Auth] SSO ok but NTLM credentials missing for ${url}. Redirecting to: ${ntlmUrl}`, "info");
+              const ntlmUrl = `/login/ntlm?callbackUrl=${encodeURIComponent(absoluteCallback)}&connectorId=${encodeURIComponent(connector?.id || "")}`;
+              this.log(`[BIZGUARD-Auth] SSO ok but NTLM credentials missing or bound to another connector for ${url}. Redirecting to: ${ntlmUrl}`, "info");
               res.writeHead(302, { Location: ntlmUrl });
               res.end();
               return;
@@ -471,7 +523,7 @@ class ProxyManager extends EventEmitter {
         return;
       }
 
-      this.handleRequest(connector, req, res, (req as any).session);
+      this.handleRequest(connector, req, res, (req as any).session, settings);
     });
 
     server.on('error', (e: any) => {
@@ -565,7 +617,14 @@ class ProxyManager extends EventEmitter {
       });
 
       backendSocket.on('error', (err: Error) => {
-        this.log(`[WS-PROXY] Error backend: ${err.message} (${connector!.id})`, 'error');
+        // ECONNRESET/EPIPE/ECONNREFUSED son cierres normales de SignalR/WebSocket
+        // (el servidor resetea conexiones inactivas y el cliente reconecta solo).
+        // No loguear como error para evitar falsa alarma.
+        const code = (err as any).code || '';
+        const isExpectedClose = code === 'ECONNRESET' || code === 'EPIPE' || code === 'ECONNREFUSED';
+        if (!isExpectedClose) {
+          this.log(`[WS-PROXY] Error backend: ${err.message} (${connector!.id})`, 'error');
+        }
         if (!socket.destroyed) socket.destroy();
       });
 
@@ -584,7 +643,7 @@ class ProxyManager extends EventEmitter {
     this.servers.set(port, server);
   }
 
-  private handleRequest(connector: Connector, req: http.IncomingMessage, res: http.ServerResponse, _session?: any) {
+  private handleRequest(connector: Connector, req: http.IncomingMessage, res: http.ServerResponse, _session: any, settings: GlobalSettings) {
     if (!this.stats.has(connector.id)) {
       this.stats.set(connector.id, { requests: 0, bytes: 0, latency: 0 });
     }
@@ -596,16 +655,46 @@ class ProxyManager extends EventEmitter {
     try {
       // Reusar el mismo proxy server (y su http.Agent keepAlive) por conector.
       // Crear uno nuevo por request acumula agentes con sockets abiertos → OOM.
-      if (!this.proxyServers.has(connector.id)) {
-        this.proxyServers.set(connector.id, createProxyServer(connector, (id, bytes, latency) => {
+      // Calcular el umbral de heartbeat (conector -> global settings -> fallback 20s)
+      const resolvedFirstPulseSec = connector.hbFirstPulse !== undefined && connector.hbFirstPulse > 0
+        ? connector.hbFirstPulse
+        : settings.hbFirstPulse !== undefined && settings.hbFirstPulse > 0
+          ? settings.hbFirstPulse
+          : 20;
+      const hbFirstPulseMs = resolvedFirstPulseSec * 1000;
+
+      // Si la configuración crítica del conector cambió (e.g. se activó HAR log o cambió el umbral), recreamos en caliente.
+      const cached = this.proxyServers.get(connector.id);
+      const hasChanged = cached && (
+        cached.connector.targetUrl !== connector.targetUrl ||
+        cached.connector.publicHost !== connector.publicHost ||
+        cached.connector.port !== connector.port ||
+        cached.connector.bypassAuth !== connector.bypassAuth ||
+        cached.connector.strictTls !== connector.strictTls ||
+        cached.connector.connectorType !== connector.connectorType ||
+        cached.connector.isNtlm !== connector.isNtlm ||
+        cached.connector.ntlmDomain !== connector.ntlmDomain ||
+        cached.connector.coreNtlmDomain !== connector.coreNtlmDomain ||
+        cached.connector.entryPath !== connector.entryPath ||
+        cached.connector.harLog !== connector.harLog ||
+        cached.connector.trafficLog !== connector.trafficLog ||
+        cached.connector.hbFirstPulse !== connector.hbFirstPulse
+      );
+
+      if (!cached || hasChanged) {
+        if (cached) {
+          this.log(`[BIZGUARD] Configuración de ${connector.id} cambió. Recreando proxy server.`, "system");
+        }
+        const server = createProxyServer(connector, (id, bytes, latency) => {
           const current = this.stats.get(id) || { requests: 0, bytes: 0, latency: 0 };
           if (bytes > 0) current.bytes += bytes;
           if (latency !== undefined) current.latency = latency;
           this.stats.set(id, { ...current });
           this.statsPending = true;
-        }));
+        }, hbFirstPulseMs);
+        this.proxyServers.set(connector.id, { server, connector });
       }
-      const proxyServer = this.proxyServers.get(connector.id)!;
+      const proxyServer = this.proxyServers.get(connector.id)!.server;
 
       this.log(`[BIZGUARD-IN] ${req.method} ${req.url} -> ${connector.id}`, "info");
       (proxyServer as any).emit('request', req, res);

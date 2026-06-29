@@ -1,0 +1,23 @@
+-- BizGuard
+-- Fecha: 2026-06-26
+-- Tema: Estabilizacion NTLM Dynamics CRM y AntiLockout
+--
+-- Este registro se crea solo con fines de trazabilidad operativa.
+-- No se realizaron cambios de esquema, migraciones ni scripts de datos.
+-- El incidente y su resolucion afectaron exclusivamente logica de aplicacion
+-- en el proxy NTLM de CRM y el flujo de autenticacion por conector.
+--
+-- Cambios funcionales relacionados:
+-- 1. Binding de credenciales CRM al connectorId real.
+-- 2. Persistencia de crmConnectorId en JWT/session.
+-- 3. Circuit breaker anti-lockout AD para rafagas de 401.
+-- 4. Agent NTLM exclusivo por request, con continuidad de conexion durante el handshake.
+-- 5. Saneamiento de headers reenviados a httpntlm.
+-- 6. Normalizacion de entryPath CRM hacia main.aspx cuando corresponde.
+--
+-- Impacto esperado:
+-- - Eliminacion de 401 masivos post-login en Dynamics CRM via proxy.
+-- - Reduccion del riesgo de lockout AD por handshakes NTLM invalidos en paralelo.
+-- - Estabilidad del login separada por conector CRM (ej: crm vs crm-test).
+--
+-- Sin operaciones SQL a ejecutar.

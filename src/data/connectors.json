@@ -6,15 +6,17 @@
     "port": 8080,
     "targetUrl": "https://arbuevcsa.bizland.tech/",
     "publicHost": "core.nathium.com.ar",
+    "connectorType": "core",
     "isActive": true
   },
   {
     "id": "test-port",
-    "name": "test port",
-    "description": "test de puerto",
+    "name": "Core Serena Test",
+    "description": "Proxy de test para Core Serena Art",
     "targetUrl": "https://awx.bizland.tech/",
     "publicHost": "core2.nathium.com.ar",
     "port": 8081,
+    "connectorType": "core",
     "isActive": true
   }
 ]
