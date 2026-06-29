@@ -8,31 +8,39 @@ import { getSettings } from "./lib/settings";
 import { logSSO } from "./lib/logger-sso";
 import { getConnectorById, getConnectors } from "./lib/connectors";
 import { buildCoreNtlmValidationUrl } from "./lib/core-ntlm";
+import { buildDynamicsCrmEntryUrl } from "./lib/dynamics-crm";
+import { resolveAuthOrigin } from "./lib/auth-origin";
 
 // Exportar como función dinámica para soportar múltiples hosts
 export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
-  const xHost = req?.headers.get("x-forwarded-host");
-  const hHost = req?.headers.get("host");
-  let fullHost = xHost || hHost || "";
+  const connectors = await getConnectors();
+  const settings = await getSettings();
+  const origin = resolveAuthOrigin({
+    forwardedHost: req?.headers.get("x-forwarded-host"),
+    requestHost: req?.headers.get("host"),
+    forwardedProto: req?.headers.get("x-forwarded-proto"),
+    connectors,
+    settings,
+    fallbackAuthUrl: process.env.AUTH_URL,
+  });
+  let fullHost = origin.effectiveHost;
+  const resolvedConnector = origin.matchedConnector;
 
   // ─── PRIORIZACIÓN POR CONECTOR ──────────────────────────────────────────────
   // Si la petición viene por un puerto que coincide con un conector configurado
   // usamos preferentemente su 'publicHost'.
-  const connectors = await getConnectors();
-  const incomingPort = parseInt(fullHost.split(":")[1] || "80");
-  const matchingConnector = connectors.find(c => c.port === incomingPort);
+  logSSO(
+    resolvedConnector?.id,
+    `[AUTH-ORIGIN] source=${origin.source} forwarded=${origin.forwardedHost || "(empty)"} request=${origin.requestHost || "(empty)"} canonical=${origin.canonicalConnectorHost || "(empty)"} effective=${origin.effectiveHost || "(empty)"} protocol=${origin.effectiveProtocol} local=${origin.isLocalRequest}`,
+  );
 
-  if (matchingConnector && matchingConnector.publicHost) {
-    const oldHost = fullHost;
+  if (!fullHost) {
+    const headerDump: Record<string, string> = {};
     // Si el conector tiene un host público, lo usamos como base.
     // Si el puerto no es estándar (80/443), lo mantenemos.
-    const cleanHost = matchingConnector.publicHost.split(":")[0];
-    fullHost = incomingPort !== 80 && incomingPort !== 443 
-      ? `${cleanHost}:${incomingPort}` 
-      : cleanHost;
-    
-    logSSO(matchingConnector.id, `[Connector-Match] Port ${incomingPort} matched connector "${matchingConnector.id}". Host: ${oldHost} -> ${fullHost}`);
-  } else if (!fullHost) {
+    req?.headers.forEach((v, k) => { headerDump[k] = v; });
+    logSSO(undefined, `[Dynamic-Fallback] Host still empty for URL: ${req?.url}`, { headers: headerDump });
+  } else if (false) {
     // Si el host sigue vacío (ej: req sin headers), fallback a settings globales
     const settings = await getSettings();
     if (settings.publicHost) {
@@ -44,11 +52,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
       logSSO(undefined, `[Dynamic-Fallback] Host still empty for URL: ${req?.url}`, { headers: headerDump });
     }
   } else {
-    logSSO(undefined, `[Dynamic-Header] No connector match for port ${incomingPort}. Using detect: host=${fullHost}`);
+    logSSO(resolvedConnector?.id, `[AUTH-ORIGIN-APPLIED] host=${fullHost} protocol=${origin.effectiveProtocol} source=${origin.source}`);
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const hostOnly = fullHost.split(":")[0];
+  const hostOnly = fullHost?.split(":")[0] || "";
   let cookieDomain: string | undefined;
 
   if (hostOnly && !hostOnly.includes("localhost") && !hostOnly.includes("127.0.0.1") && !hostOnly.startsWith("10.") && !hostOnly.startsWith("192.")) {
@@ -65,7 +73,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
     }
   }
 
-  const protocol = (fullHost.includes("localhost") || fullHost.includes("127.0.0.1")) ? "http" : "https";
+  const protocol = origin.effectiveProtocol;
   const dynamicCallbackUrl = fullHost ? `${protocol}://${fullHost}/api/auth/callback/microsoft-entra-id` : undefined;
 
   const dynamicProviders = [
@@ -81,31 +89,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
       credentials: {
         username: { label: "Username", type: "text" },
         password: { label: "Password", type: "password" },
-        domain: { label: "Domain", type: "text" }
+        domain: { label: "Domain", type: "text" },
+        connectorId: { label: "Connector", type: "text" }
       },
       async authorize(credentials) {
-        if (!credentials?.username || !credentials?.password) return null;
+        if (!credentials?.username || !credentials?.password || !credentials?.connectorId) return null;
         const username = credentials.username as string;
         const password = credentials.password as string;
         const domain = (credentials.domain as string) || "SERENASEGUROS";
+        const connectorId = credentials.connectorId as string;
 
         // Validar credenciales contra el CRM real antes de crear sesión
-        const { getConnectors } = await import("./lib/connectors");
         const httpntlm = await import("httpntlm");
-        const connectors = await getConnectors();
-        const ntlmConnector = connectors.find(c => c.isNtlm && c.isActive);
-        if (!ntlmConnector) return null;
+        const ntlmConnector = await getConnectorById(connectorId);
+        if (!ntlmConnector || !ntlmConnector.isActive || (!ntlmConnector.isNtlm && ntlmConnector.connectorType !== "dynamics-crm")) {
+          logSSO(connectorId, `[NTLM-AUTH] Conector inválido o no habilitado para CRM NTLM.`);
+          return null;
+        }
 
         try {
           // Usar entryPath si está configurado (ej: /Inicio/ o /SERENAART/).
           // La raíz / puede devolver 404 o redirect en algunos CRM — no es indicador fiable.
-          const baseUrl = ntlmConnector.targetUrl.replace(/\/$/, '');
-          const testPath = ntlmConnector.entryPath ? ntlmConnector.entryPath.replace(/^\//, '') : '';
-          const testUrl = `${baseUrl}/${testPath}`;
+          const testUrl = buildDynamicsCrmEntryUrl(ntlmConnector.targetUrl, ntlmConnector.entryPath);
           const testIsHttps = testUrl.startsWith("https://");
           const agent = testIsHttps
             ? new https.Agent({ keepAlive: true, rejectUnauthorized: ntlmConnector.strictTls === true })
             : new http.Agent({ keepAlive: true });
+          logSSO(connectorId, `[NTLM-AUTH] Validando credenciales CRM contra ${testUrl} | strictTls=${ntlmConnector.strictTls === true}`);
           const valid = await new Promise<boolean>((resolve) => {
             httpntlm.get({
               username, password, domain, workstation: '',
@@ -118,16 +128,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
               resolve(res.statusCode !== 401);
             });
           });
-          if (!valid) return null;
-        } catch { return null; }
+          if (!valid) {
+            logSSO(connectorId, `[NTLM-AUTH] Credenciales rechazadas para usuario=${username}.`);
+            return null;
+          }
+        } catch (error: any) {
+          logSSO(connectorId, `[NTLM-AUTH] Excepción inesperada durante validación: ${error?.message || error}`);
+          return null;
+        }
 
         return {
-          id: username,
+          id: `${connectorId}:${username}`,
           email: `${username}@${domain}`,
           name: username,
           crmUser: username,
           crmPass: password,
           crmDomain: domain,
+          crmConnectorId: connectorId,
         };
       }
     }),
@@ -206,8 +223,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
   // which doesn't match Azure AD's registered redirect URI → OAuthCallbackError.
   const redirectProxyUrl = fullHost ? `${protocol}://${fullHost}/api/auth` : process.env.AUTH_URL ? `${process.env.AUTH_URL}/api/auth` : undefined;
 
-  logSSO(matchingConnector?.id, `[INIT] fullHost=${fullHost || "(empty)"} | cookieDomain=${cookieDomain || "(none)"} | protocol=${protocol}`);
-  logSSO(matchingConnector?.id, `[INIT] redirectProxyUrl=${redirectProxyUrl || "(undefined)"} | dynamicCallbackUrl=${dynamicCallbackUrl || "(undefined)"}`);
+  logSSO(resolvedConnector?.id, `[INIT] fullHost=${fullHost || "(empty)"} | cookieDomain=${cookieDomain || "(none)"} | protocol=${protocol}`);
+  logSSO(resolvedConnector?.id, `[INIT] redirectProxyUrl=${redirectProxyUrl || "(undefined)"} | dynamicCallbackUrl=${dynamicCallbackUrl || "(undefined)"}`);
 
   return {
     pages: { signIn: '/login' },
@@ -264,17 +281,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
     callbacks: {
       async authorized({ auth, request }: any) {
         const { nextUrl } = request;
-        const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "";
-        const port = parseInt(host.split(":")[1] || "80");
         const connectors = await getConnectors();
-        const conn = connectors.find(c => c.port === port);
+        const settings = await getSettings();
+        const forwardedHost = request.headers.get("x-forwarded-host");
+        const requestHost = request.headers.get("host");
+        const host = forwardedHost || requestHost || "";
+        const port = parseInt(host.split(":")[1] || "80");
+        const authorizedOrigin = resolveAuthOrigin({
+          forwardedHost,
+          requestHost,
+          forwardedProto: request.headers.get("x-forwarded-proto"),
+          connectors,
+          settings,
+          fallbackAuthUrl: process.env.AUTH_URL,
+        });
+        const conn = authorizedOrigin.matchedConnector ?? connectors.find(c => c.port === port);
         const connectorId = conn?.id;
         const isLoggedIn = !!auth?.user;
-        logSSO(connectorId, `[authorized] path=${nextUrl.pathname} | host=${host} | isLoggedIn=${isLoggedIn} | user=${auth?.user?.email || "none"}`);
+        logSSO(connectorId, `[authorized] path=${nextUrl.pathname} | host=${host} | effectiveHost=${authorizedOrigin.effectiveHost || "(empty)"} | source=${authorizedOrigin.source} | isLoggedIn=${isLoggedIn} | user=${auth?.user?.email || "none"}`);
 
         if (host.includes(":3000")) { logSSO(connectorId, `[authorized] -> BYPASS (localhost:3000)`); return true; }
-
-        const settings = await getSettings();
+        if (conn?.bypassAuth) { logSSO(connectorId, `[authorized] -> BYPASS (connector.bypassAuth=true)`); return true; }
         if (settings.bypassAuth) { logSSO(connectorId, `[authorized] -> BYPASS (bypassAuth=true)`); return true; }
 
         const isProxyRoute = nextUrl.pathname.startsWith("/proxy") || nextUrl.pathname === "/";
@@ -303,7 +330,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
         // fullHost puede ser vacío (llamadas internas de NextAuth sin req context)
         // o ser localhost:3000 (la semilla del .env.local).
         // En esos casos, intentamos extraer el host real de la propia URL de destino.
-        const isLocalOrEmpty = !fullHost || fullHost.includes("localhost") || fullHost.includes("127.0.0.1") || fullHost.includes("0.0.0.0");
+        const isLocalOrEmpty = !fullHost || origin.isLocalRequest;
         
         let resolvedHost = fullHost;
         let resolvedProtocol = protocol;
@@ -313,7 +340,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
             const urlParsed = new URL(url);
             const urlHost = urlParsed.hostname;
             const notInternal = !urlHost.includes("localhost") && !urlHost.includes("127.0.0.1") && !urlHost.includes("0.0.0.0");
-            if (notInternal) {
+            if (notInternal && !origin.isLocalRequest) {
               resolvedHost = urlParsed.port ? `${urlHost}:${urlParsed.port}` : urlHost;
               resolvedProtocol = urlParsed.protocol.replace(":", "");
               logSSO(connectorId, `[URL-Hint] Extracted real host from redirect URL: ${resolvedHost}`);
@@ -326,7 +353,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
         // El 'baseUrl' viene del AUTH_URL del .env (localhost:3000 - semilla)
         // Solo es "incorrecto" si tenemos un host alternativo real para sustituirlo
         const baseIsInternal = baseUrl.includes("0.0.0.0") || baseUrl.includes("127.0.0.1") || baseUrl.includes("localhost");
-        const canFix = baseIsInternal && resolvedHost && !resolvedHost.includes("localhost");
+        const canFix = baseIsInternal && resolvedHost && !origin.isLocalRequest;
         const effectiveBase = canFix
           ? `${resolvedProtocol}://${resolvedHost}`
           : baseUrl;
@@ -384,6 +411,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
           token.crmUser = (user as any).crmUser;
           token.crmPass = (user as any).crmPass;
           token.crmDomain = (user as any).crmDomain;
+          token.crmConnectorId = (user as any).crmConnectorId;
         }
         if (user && account?.provider === "core-ntlm-login") {
           token.coreUser = (user as any).coreUser;
@@ -398,6 +426,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async (req) => {
           (session as any).crmUser = token.crmUser;
           (session as any).crmPass = token.crmPass;
           (session as any).crmDomain = token.crmDomain;
+          (session as any).crmConnectorId = token.crmConnectorId;
         }
         if (token.coreUser) {
           (session as any).coreUser = token.coreUser;

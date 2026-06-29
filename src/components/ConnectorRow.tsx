@@ -1,49 +1,14 @@
-"use client"
+﻿"use client"
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Connector } from "@/lib/connectors";
+import { ConnectorProductType, PRODUCT_CATALOG, normalizeConnectorProductType } from "@/lib/product-catalog";
 import { updateConnectorAction, toggleConnectorAction, deleteConnectorAction } from "@/app/actions";
 import { Server, Settings2, Pause, Play, Activity, X, Save, ExternalLink, ShieldOff, Trash2 } from "lucide-react";
 import { useStats } from "@/contexts/StatsContext";
 
-const CONNECTOR_TYPES = [
-  { 
-    value: 'generic',       
-    label: 'Genérico',          
-    icon: '🔗', 
-    desc: 'Proxy HTTP/HTTPS estándar. Sin customizaciones específicas.',
-    tooltip: 'Solo activa el Heartbeat para navegaciones GET tradicionales (excluye POST y AJAX/XHR). Sin reescritura de respuesta.'
-  },
-  { 
-    value: 'dynamics-crm',  
-    label: 'Dynamics CRM',      
-    icon: '📊', 
-    desc: 'Microsoft Dynamics CRM on-premise. Habilita NTLM y reescrituras.',
-    tooltip: 'Mismas reglas de Heartbeat que el Genérico (solo GET), habilitando además handshake de autenticación integrada NTLM.'
-  },
-  { 
-    value: 'core',          
-    label: 'Core',               
-    icon: '🏦', 
-    desc: 'Sistema Core bancario. Heartbeat habilitado en POST/uploads.',
-    tooltip: 'Habilita Heartbeat Shield ampliado para peticiones POST (especialmente subidas multipart/form-data largas). Excluye AJAX ordinarios.'
-  },
-  { 
-    value: 'bank',          
-    label: 'BANK', 
-    icon: '💳', 
-    desc: 'Portal bancario. Autocorrección de peticiones AJAX.',
-    tooltip: 'Mismas reglas que el Genérico (solo GET). Incluye reescritura en caliente para corregir errores de llamadas AJAX que usan type: "Json" incorrectamente.'
-  },
-  { 
-    value: 'serena-test',   
-    label: 'Serena Test',        
-    icon: '🧪', 
-    desc: 'Entorno de staging y pruebas custom. Reglas de DNN.',
-    tooltip: 'Heartbeat para GET y POST selectivo (excluye login). Desactiva HB en AJAX Delta. Limpia rutas Portals de DNN e inyecta auto-reload al autenticarse.'
-  },
-] as const;
+const CONNECTOR_TYPES = PRODUCT_CATALOG;
 
 function ConnectorTypeSection({ connectorType, onChange }: { connectorType?: string; onChange?: (type: string) => void }) {
   const current = connectorType || 'generic';
@@ -94,9 +59,19 @@ function DynamicsCrmSection({ ntlmEnabled, onNtlmChange, ntlmDomain }: { ntlmEna
   );
 }
 
-export function ConnectorRow({ connector, isSelected }: { connector: Connector, isSelected?: boolean }) {
+export function ConnectorRow({
+  connector,
+  isSelected,
+  dashboardHost,
+  dashboardProtocol,
+}: {
+  connector: Connector;
+  isSelected?: boolean;
+  dashboardHost: string;
+  dashboardProtocol: "http" | "https";
+}) {
   const [isEditing, setIsEditing] = useState(false);
-  const [selectedType, setSelectedType] = useState<'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test'>(connector.connectorType || 'generic');
+  const [selectedType, setSelectedType] = useState<ConnectorProductType>(normalizeConnectorProductType(connector.connectorType));
   const [ntlmEnabled, setNtlmEnabled] = useState(connector.isNtlm === true);
   const [coreNtlmDomain, setCoreNtlmDomain] = useState(connector.coreNtlmDomain || "");
   const [harLog, setHarLog] = useState(connector.harLog === true);
@@ -108,7 +83,7 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
   const [trafficRetentionUnit, setTrafficRetentionUnit] = useState(connector.trafficRetentionUnit || "hours");
 
   const handleTypeChange = (type: string) => {
-    setSelectedType(type as 'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test');
+    setSelectedType(normalizeConnectorProductType(type));
     if (type === 'dynamics-crm') setNtlmEnabled(true);
     if (type === 'core') setNtlmEnabled(false);
   };
@@ -154,6 +129,11 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
 
   const [activeTab, setActiveTab] = useState<'general' | 'producto' | 'seguridad' | 'diagnostico'>('general');
   const [bypassAuth, setBypassAuth] = useState(connector.bypassAuth === true);
+  const currentHostname = dashboardHost.split(":")[0] || dashboardHost;
+  const isLocalDashboard = currentHostname === "localhost" || currentHostname === "127.0.0.1";
+  const gatewayUrl = isLocalDashboard
+    ? `http://${currentHostname}:${connector.port}/`
+    : `${dashboardProtocol}://${connector.publicHost}:${connector.port}/`;
 
   const tabs = [
     { id: 'general' as const,     label: 'General',   badge: null },
@@ -206,12 +186,12 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
             </div>
           </div>
 
-          {/* Tab content — todos los paneles siempre en el DOM para que los inputs se incluyan en el submit */}
+          {/* Tab content â€” todos los paneles siempre en el DOM para que los inputs se incluyan en el submit */}
           <div className="overflow-y-auto flex-1">
 
             <div className={`px-6 py-5 space-y-5 ${activeTab === 'general' ? '' : 'hidden'}`}>
 
-              {/* ── Sección: Identidad ─────────────────────────────────── */}
+              {/* Sección: Identidad */}
               <div>
                 <p className="font-label text-[9px] font-bold uppercase tracking-[0.15em] text-primary/60 mb-3 flex items-center gap-2">
                   <span className="flex-1 h-px bg-primary/10"></span>
@@ -224,7 +204,7 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
                 </div>
               </div>
 
-              {/* ── Sección: Red ───────────────────────────────────────── */}
+              {/* Sección: Red */}
               <div>
                 <p className="font-label text-[9px] font-bold uppercase tracking-[0.15em] text-primary/60 mb-3 flex items-center gap-2">
                   <span className="flex-1 h-px bg-primary/10"></span>
@@ -234,7 +214,7 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
                 <div className="space-y-3">
                   <div className="grid grid-cols-[1fr_148px] gap-5">
                     <div>
-                      <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Host Público</label>
+                  <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Host Público</label>
                       <input
                         name="publicHost"
                         defaultValue={connector.publicHost}
@@ -295,7 +275,8 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
                   <p className="font-body text-[10px] text-on-surface-variant mt-0.5">Desactiva la autenticación Microsoft Entra ID para este conector. Cualquier usuario podrá acceder sin login.</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
-                  <input type="checkbox" name="bypassAuth" checked={bypassAuth} onChange={e => setBypassAuth(e.target.checked)} className="sr-only peer" />
+                  <input type="hidden" name="bypassAuth" value={bypassAuth ? "true" : "false"} />
+                  <input type="checkbox" checked={bypassAuth} onChange={e => setBypassAuth(e.target.checked)} className="sr-only peer" />
                   <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-error peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
                 </label>
               </div>
@@ -326,7 +307,8 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
                       </p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
-                      <input type="checkbox" name="harLog" checked={harLog} onChange={e => setHarLog(e.target.checked)} className="sr-only peer" />
+                      <input type="hidden" name="harLog" value={harLog ? "true" : "false"} />
+                      <input type="checkbox" checked={harLog} onChange={e => setHarLog(e.target.checked)} className="sr-only peer" />
                       <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-secondary peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
                     </label>
                   </div>
@@ -346,7 +328,8 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
                       </p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
-                      <input type="checkbox" name="trafficLog" checked={trafficLog} onChange={e => setTrafficLog(e.target.checked)} className="sr-only peer" />
+                      <input type="hidden" name="trafficLog" value={trafficLog ? "true" : "false"} />
+                      <input type="checkbox" checked={trafficLog} onChange={e => setTrafficLog(e.target.checked)} className="sr-only peer" />
                       <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-primary peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
                     </label>
                   </div>
@@ -364,7 +347,8 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
                       </p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
-                      <input type="checkbox" name="ssoLog" checked={ssoLog} onChange={e => setSsoLog(e.target.checked)} className="sr-only peer" />
+                      <input type="hidden" name="ssoLog" value={ssoLog ? "true" : "false"} />
+                      <input type="checkbox" checked={ssoLog} onChange={e => setSsoLog(e.target.checked)} className="sr-only peer" />
                       <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-primary peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
                     </label>
                   </div>
@@ -379,7 +363,8 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
                       </p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
-                      <input type="checkbox" name="hbLog" checked={hbLog} onChange={e => setHbLog(e.target.checked)} className="sr-only peer" />
+                      <input type="hidden" name="hbLog" value={hbLog ? "true" : "false"} />
+                      <input type="checkbox" checked={hbLog} onChange={e => setHbLog(e.target.checked)} className="sr-only peer" />
                       <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-primary peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
                     </label>
                   </div>
@@ -528,7 +513,7 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
         <a href={connector.targetUrl} target="_blank" className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container-highest rounded-lg transition-all active:scale-90" title="Open Origin (Internal Web)">
           <ExternalLink className="w-4 h-4" />
         </a>
-        <a href={`http://${connector.publicHost}:${connector.port}/`} target="_blank" className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container-highest rounded-lg transition-all active:scale-90" title="BizGuard Monitoring / View Public Gateway">
+        <a href={gatewayUrl} target="_blank" className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-surface-container-highest rounded-lg transition-all active:scale-90" title="BizGuard Monitoring / View Public Gateway">
           <Activity className="w-4 h-4" />
         </a>
         <button
@@ -562,3 +547,4 @@ export function ConnectorRow({ connector, isSelected }: { connector: Connector, 
     </>
   );
 }
+

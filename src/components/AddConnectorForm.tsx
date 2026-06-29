@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { createConnectorAction, checkPortAction } from "@/app/actions";
 import { useActionState, useState, useEffect } from "react";
@@ -15,44 +15,9 @@ import {
   Shield, 
   Activity 
 } from "lucide-react";
+import { PRODUCT_CATALOG } from "@/lib/product-catalog";
 
-const CONNECTOR_TYPES = [
-  { 
-    value: 'generic',       
-    label: 'Genérico',          
-    icon: '🔗', 
-    desc: 'Proxy HTTP/HTTPS estándar. Sin customizaciones específicas.',
-    tooltip: 'Solo activa el Heartbeat para navegaciones GET tradicionales (excluye POST y AJAX/XHR). Sin reescritura de respuesta.'
-  },
-  { 
-    value: 'dynamics-crm',  
-    label: 'Dynamics CRM',      
-    icon: '📊', 
-    desc: 'Microsoft Dynamics CRM on-premise. Habilita NTLM y reescrituras.',
-    tooltip: 'Mismas reglas de Heartbeat que el Genérico (solo GET), habilitando además handshake de autenticación integrada NTLM.'
-  },
-  { 
-    value: 'core',          
-    label: 'Core',               
-    icon: '🏦', 
-    desc: 'Sistema Core bancario. Heartbeat habilitado en POST/uploads.',
-    tooltip: 'Habilita Heartbeat Shield ampliado para peticiones POST (especialmente subidas multipart/form-data largas). Excluye AJAX ordinarios.'
-  },
-  { 
-    value: 'bank',          
-    label: 'BANK', 
-    icon: '💳', 
-    desc: 'Portal bancario. Autocorrección de peticiones AJAX.',
-    tooltip: 'Mismas reglas que el Genérico (solo GET). Incluye reescritura en caliente para corregir errores de llamadas AJAX que usan type: "Json" incorrectamente.'
-  },
-  { 
-    value: 'serena-test',   
-    label: 'Serena Test',        
-    icon: '🧪', 
-    desc: 'Entorno de staging y pruebas custom. Reglas de DNN.',
-    tooltip: 'Heartbeat para GET y POST selectivo (excluye login). Desactiva HB en AJAX Delta. Limpia rutas Portals de DNN e inyecta auto-reload al autenticarse.'
-  },
-] as const;
+const CONNECTOR_TYPES = PRODUCT_CATALOG;
 
 export function AddConnectorForm() {
   const [state, formAction, isPending] = useActionState(createConnectorAction, {
@@ -380,9 +345,9 @@ export function AddConnectorForm() {
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                <input type="hidden" name="bypassAuth" value={bypassAuth ? "true" : "false"} />
                 <input 
                   type="checkbox" 
-                  name="bypassAuth" 
                   checked={bypassAuth} 
                   onChange={e => setBypassAuth(e.target.checked)} 
                   className="sr-only peer" 
@@ -402,9 +367,9 @@ export function AddConnectorForm() {
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                <input type="hidden" name="isNtlm" value={isNtlm ? "true" : "false"} />
                 <input 
                   type="checkbox" 
-                  name="isNtlm" 
                   checked={isNtlm} 
                   disabled={connectorType === "dynamics-crm"}
                   onChange={e => setIsNtlm(e.target.checked)} 
@@ -447,9 +412,9 @@ export function AddConnectorForm() {
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                <input type="hidden" name="harLog" value={harLog ? "true" : "false"} />
                 <input 
                   type="checkbox" 
-                  name="harLog" 
                   checked={harLog} 
                   onChange={e => setHarLog(e.target.checked)} 
                   className="sr-only peer" 
@@ -467,9 +432,9 @@ export function AddConnectorForm() {
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                <input type="hidden" name="trafficLog" value={trafficLog ? "true" : "false"} />
                 <input 
                   type="checkbox" 
-                  name="trafficLog" 
                   checked={trafficLog} 
                   onChange={e => setTrafficLog(e.target.checked)} 
                   className="sr-only peer" 
@@ -487,9 +452,9 @@ export function AddConnectorForm() {
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                <input type="hidden" name="ssoLog" value={ssoLog ? "true" : "false"} />
                 <input 
                   type="checkbox" 
-                  name="ssoLog" 
                   checked={ssoLog} 
                   onChange={e => setSsoLog(e.target.checked)} 
                   className="sr-only peer" 
@@ -507,9 +472,9 @@ export function AddConnectorForm() {
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                <input type="hidden" name="hbLog" value={hbLog ? "true" : "false"} />
                 <input 
                   type="checkbox" 
-                  name="hbLog" 
                   checked={hbLog} 
                   onChange={e => setHbLog(e.target.checked)} 
                   className="sr-only peer" 
@@ -635,3 +600,4 @@ export function AddConnectorForm() {
     </section>
   );
 }
+

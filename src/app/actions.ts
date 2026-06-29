@@ -7,6 +7,18 @@ import { proxyManager } from "@/lib/proxy-manager";
 import net from "net";
 import { getSettings, updateSettings } from "@/lib/settings";
 import { headers } from "next/headers";
+import {
+  buildDefaultProductConfig,
+  ConnectorProductType,
+  normalizeConnectorProductType,
+} from "@/lib/product-catalog";
+
+function getFormBooleanValue(formData: FormData, fieldName: string): boolean {
+  const rawValue = formData.get(fieldName);
+  if (rawValue === null) return false;
+  const normalized = String(rawValue).trim().toLowerCase();
+  return normalized === "true" || normalized === "on" || normalized === "1" || normalized === "yes";
+}
 
 export async function createConnectorAction(prevState: any, formData: FormData) {
   try {
@@ -17,16 +29,18 @@ export async function createConnectorAction(prevState: any, formData: FormData) 
     const port = parseInt(formData.get("port") as string);
     const id = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
-    const bypassAuth = formData.get("bypassAuth") === "on";
-    const connectorType = (formData.get("connectorType") as string || "generic") as 'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test';
-    const isNtlm = connectorType === 'dynamics-crm' || formData.get("isNtlm") === "on";
+    const bypassAuth = getFormBooleanValue(formData, "bypassAuth");
+    const connectorType = normalizeConnectorProductType(
+      (formData.get("connectorType") as string) || "generic",
+    ) as ConnectorProductType;
+    const isNtlm = connectorType === 'dynamics-crm' || getFormBooleanValue(formData, "isNtlm");
     const ntlmDomain = (formData.get("ntlmDomain") as string || "").trim() || undefined;
     const coreNtlmDomain = (formData.get("coreNtlmDomain") as string || "").trim() || undefined;
     const entryPath = (formData.get("entryPath") as string || "").trim() || undefined;
-    const harLog = formData.get("harLog") === "on";
-    const trafficLog = formData.get("trafficLog") === "on";
-    const ssoLog = formData.get("ssoLog") === "on";
-    const hbLog = formData.get("hbLog") === "on";
+    const harLog = getFormBooleanValue(formData, "harLog");
+    const trafficLog = getFormBooleanValue(formData, "trafficLog");
+    const ssoLog = getFormBooleanValue(formData, "ssoLog");
+    const hbLog = getFormBooleanValue(formData, "hbLog");
     const hbFirstPulseStr = formData.get("hbFirstPulse") as string;
     const hbFirstPulse = hbFirstPulseStr ? parseInt(hbFirstPulseStr) : undefined;
     const trafficRetentionValueStr = formData.get("trafficRetentionValue") as string;
@@ -42,6 +56,7 @@ export async function createConnectorAction(prevState: any, formData: FormData) 
       port,
       bypassAuth,
       connectorType,
+      productConfig: buildDefaultProductConfig(connectorType),
       isNtlm,
       ntlmDomain,
       coreNtlmDomain,
@@ -71,17 +86,19 @@ export async function updateConnectorAction(id: string, formData: FormData) {
   const targetUrl = formData.get("targetUrl") as string;
   const publicHost = formData.get("publicHost") as string;
   const port = parseInt(formData.get("port") as string);
-  const bypassAuth = formData.get("bypassAuth") === "on";
-  const connectorType = (formData.get("connectorType") as string || "generic") as 'generic' | 'dynamics-crm' | 'core' | 'bank' | 'serena-test';
+  const bypassAuth = getFormBooleanValue(formData, "bypassAuth");
+  const connectorType = normalizeConnectorProductType(
+    (formData.get("connectorType") as string) || "generic",
+  ) as ConnectorProductType;
   // Para dynamics-crm, isNtlm siempre true aunque el hidden field diga "on"
-  const isNtlm = connectorType === 'dynamics-crm' || formData.get("isNtlm") === "on";
+  const isNtlm = connectorType === 'dynamics-crm' || getFormBooleanValue(formData, "isNtlm");
   const ntlmDomain = (formData.get("ntlmDomain") as string || "").trim() || undefined;
   const coreNtlmDomain = (formData.get("coreNtlmDomain") as string || "").trim() || undefined;
   const entryPath = (formData.get("entryPath") as string || "").trim() || undefined;
-  const harLog = formData.get("harLog") === "on";
-  const trafficLog = formData.get("trafficLog") === "on";
-  const ssoLog = formData.get("ssoLog") === "on";
-  const hbLog = formData.get("hbLog") === "on";
+  const harLog = getFormBooleanValue(formData, "harLog");
+  const trafficLog = getFormBooleanValue(formData, "trafficLog");
+  const ssoLog = getFormBooleanValue(formData, "ssoLog");
+  const hbLog = getFormBooleanValue(formData, "hbLog");
   const hbFirstPulseStr = formData.get("hbFirstPulse") as string;
   const hbFirstPulse = hbFirstPulseStr ? parseInt(hbFirstPulseStr) : undefined;
   const trafficRetentionValueStr = formData.get("trafficRetentionValue") as string;
@@ -161,7 +178,7 @@ export async function updateGlobalSettingsAction(prevState: any, formData: FormD
   const internalTarget = (formData.get("internalTarget") as string || "").trim();
   const hbFirstPulseStr = (formData.get("hbFirstPulse") as string || "").trim();
   const memoryResetIntervalMinutesStr = (formData.get("memoryResetIntervalMinutes") as string || "").trim();
-  const bypassAuth = formData.get("bypassAuth") === "on";
+  const bypassAuth = getFormBooleanValue(formData, "bypassAuth");
 
   const hbFirstPulse = hbFirstPulseStr ? parseInt(hbFirstPulseStr, 10) : 20;
   const memoryResetIntervalMinutes = memoryResetIntervalMinutesStr ? parseInt(memoryResetIntervalMinutesStr, 10) : 30;

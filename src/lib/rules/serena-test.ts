@@ -1,5 +1,6 @@
 import http from "http";
-import { BaseRules } from "./base";
+import { BaseRules, RequestContext } from "./base";
+import { ProductExecutionMode } from "../product-catalog";
 
 /**
  * SerenaTestRules: Entorno de Staging y Pruebas Custom.
@@ -27,6 +28,16 @@ export class SerenaTestRules extends BaseRules {
     const isHeavyUpload = req.headers['content-type']?.includes('multipart/form-data');
     
     return !isStatic && !isImage && (isHeavyUpload || !isXhr);
+  }
+
+  resolveExecutionMode(ctx: RequestContext): ProductExecutionMode {
+    if (this.isLoginHintPath(ctx)) return "none";
+    if (this.hasConfiguredBackgroundJobPath(ctx)) return "background-job";
+    if (ctx.isMultipartUpload && ctx.productConfig.backgroundJobForMultipart) return "background-job";
+    if (ctx.hasForcedHeartbeatPath) return this.resolveForcedExecutionMode(ctx);
+    if (!this.isHbEligible(ctx.req, ctx.urlPart, ctx.isStatic, ctx.isImage)) return "none";
+    if (ctx.isAjax && ctx.productConfig.xhrKeepAliveForAjax) return "xhr-keepalive";
+    return "passive-html";
   }
 
   /**

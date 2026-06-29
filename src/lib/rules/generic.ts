@@ -1,5 +1,6 @@
 import http from "http";
-import { BaseRules } from "./base";
+import { BaseRules, RequestContext } from "./base";
+import { ProductExecutionMode } from "../product-catalog";
 
 export class GenericRules extends BaseRules {
   isHbEligible(req: http.IncomingMessage, urlPart: string, isStatic: boolean, isImage: boolean): boolean {
@@ -8,6 +9,12 @@ export class GenericRules extends BaseRules {
     
     // Comportamiento por defecto: HB solo para navegación GET
     return !isStatic && !isImage && !isPostLike && !isXhr;
+  }
+
+  resolveExecutionMode(ctx: RequestContext): ProductExecutionMode {
+    if (ctx.hasForcedHeartbeatPath) return this.resolveForcedExecutionMode(ctx);
+    if (!this.isHbEligible(ctx.req, ctx.urlPart, ctx.isStatic, ctx.isImage)) return "none";
+    return "passive-html";
   }
 }
 

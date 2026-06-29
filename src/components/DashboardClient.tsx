@@ -8,7 +8,15 @@ import { GlobalMetricsSummary } from "@/components/GlobalMetricsSummary";
 import { useStats } from "@/contexts/StatsContext";
 import { LayoutGrid, List, RefreshCw } from "lucide-react";
 
-export function DashboardClient({ initialConnectors }: { initialConnectors: Connector[] }) {
+export function DashboardClient({
+  initialConnectors,
+  dashboardHost,
+  dashboardProtocol,
+}: {
+  initialConnectors: Connector[];
+  dashboardHost: string;
+  dashboardProtocol: "http" | "https";
+}) {
   const [selectedConnectorId, setSelectedConnectorId] = useState<string | null>(null);
   const { connectors, metrics } = useStats();
   const [timeRemaining, setTimeRemaining] = useState<string>("--:--");
@@ -90,7 +98,12 @@ export function DashboardClient({ initialConnectors }: { initialConnectors: Conn
               onClick={() => setSelectedConnectorId(connector.id === selectedConnectorId ? null : connector.id)}
               className={`cursor-pointer transition-all duration-300 ${selectedConnectorId === connector.id ? 'ring-2 ring-primary/30 rounded-lg translate-x-1' : ''}`}
             >
-              <ConnectorRow connector={connector} isSelected={selectedConnectorId === connector.id} />
+              <ConnectorRow
+                connector={connector}
+                isSelected={selectedConnectorId === connector.id}
+                dashboardHost={dashboardHost}
+                dashboardProtocol={dashboardProtocol}
+              />
             </div>
           ))}
           {displayConnectors.length === 0 && (

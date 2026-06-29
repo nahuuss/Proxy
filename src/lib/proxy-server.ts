@@ -7,10 +7,15 @@ import { EventEmitter } from "events";
 import { Connector } from "./connectors";
 import { logHB as rawLogHB } from "./logger-hb";
 import { logHarEntry } from "./logger-har";
+import { logSSO } from "./logger-sso";
 import { trafficLogger, extractCookieNames, TrafficEntry, DebugEntry } from "./logger-traffic";
 import { applyDeepRewrite, serveAsBlobDownload, renderBgJobPage, rewriteHeaders } from "./proxy-utils";
 import { getRulesFor } from "./rules";
 import { buildCoreNtlmValidationUrl, hasCoreNtlmSessionForConnector, isCoreNtlmPath } from "./core-ntlm";
+import { normalizeDynamicsCrmProxyPath, rewriteDynamicsCrmClientConfig } from "./dynamics-crm";
+import { deleteBgJob, getBgJob, setBgJob, startBgJobCleanup, updateBgJob } from "./background-job-store";
+import { getEffectiveProductConfig, ProductExecutionMode } from "./product-catalog";
+import { classifyRequest } from "./request-classifier";
 
 export type MetricCallback = (id: string, bytes: number, latency?: number) => void;
 
@@ -23,25 +28,138 @@ const HB_INTERVAL_MS = 15000;     // Intervalo de keepalive (TCP o body spaces p
 // Límite de tamaño de body en requests entrantes (protección contra OOM).
 const MAX_BODY_BYTES = parseInt(process.env.MAX_REQUEST_BODY_MB || '500') * 1024 * 1024;
 
-// ─── Background Job Store ────────────────────────────────────────────────────
-interface BgJob {
-  status: 'pending' | 'done' | 'error';
-  startedAt: number;
-  connectorId: string;
-  method: string;
-  path: string;
-  statusCode?: number;
-  responseHeaders?: Record<string, string | string[] | undefined>;
-  responseBody?: Buffer;
-  error?: string;
+function normalizeHeartbeatPathCandidate(value: string): string {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return "";
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
 }
-const bgJobs = new Map<string, BgJob>();
-setInterval(() => {
-  const cutoff = Date.now() - 30 * 60 * 1000;
-  for (const [id, job] of bgJobs) {
-    if (job.startedAt < cutoff) bgJobs.delete(id);
+
+function matchesForcedHeartbeatPath(urlPart: string, forcedUrls?: string[]): boolean {
+  if (!forcedUrls || forcedUrls.length === 0) return false;
+  const normalizedPath = normalizeHeartbeatPathCandidate(urlPart);
+  return forcedUrls
+    .map(normalizeHeartbeatPathCandidate)
+    .filter(Boolean)
+    .some(candidate =>
+      normalizedPath === candidate ||
+      normalizedPath.startsWith(`${candidate}?`) ||
+      normalizedPath.startsWith(candidate)
+    );
+}
+
+function emitInterimProcessingPulse(res: http.ServerResponse): boolean {
+  if (res.headersSent || res.writableEnded || res.destroyed) return false;
+  const writer = (res as any).writeProcessing;
+  if (typeof writer !== "function") return false;
+  writer.call(res);
+  return true;
+}
+
+// ─── Background Job Store ────────────────────────────────────────────────────
+startBgJobCleanup(30 * 60 * 1000, 10 * 60 * 1000);
+
+interface CrmNtlmCircuitState {
+  failures: number[];
+  blockedUntil: number;
+}
+
+const CRM_NTLM_FAIL_WINDOW_MS = 60_000;
+const CRM_NTLM_FAIL_THRESHOLD = 5;
+const CRM_NTLM_BLOCK_MS = 3 * 60_000;
+const crmNtlmCircuit = new Map<string, CrmNtlmCircuitState>();
+
+function getCrmNtlmCircuitKey(connectorId: string, username: string) {
+  return `${connectorId}:${username}`.toLowerCase();
+}
+
+function pruneCrmNtlmFailures(now: number, state?: CrmNtlmCircuitState) {
+  if (!state) return;
+  state.failures = state.failures.filter(ts => now - ts <= CRM_NTLM_FAIL_WINDOW_MS);
+  if (state.blockedUntil && state.blockedUntil <= now) {
+    state.blockedUntil = 0;
   }
-}, 10 * 60 * 1000).unref();
+}
+
+function isCrmNtlmNoisePath(path: string) {
+  return path.toLowerCase().startsWith("/.well-known/appspecific/");
+}
+
+function buildCrmNtlmHeaders(headers: http.IncomingHttpHeaders, bodyLength: number) {
+  const allowedHeaderNames = new Set([
+    'accept',
+    'accept-language',
+    'cache-control',
+    'content-type',
+    'if-match',
+    'if-none-match',
+    'origin',
+    'pragma',
+    'referer',
+    'soapaction',
+    'user-agent',
+    'x-requested-with',
+  ]);
+
+  const sanitized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers || {})) {
+    const normalizedKey = key.toLowerCase();
+    if (!allowedHeaderNames.has(normalizedKey)) continue;
+    if (typeof value === 'string') sanitized[normalizedKey] = value;
+    else if (Array.isArray(value)) sanitized[normalizedKey] = value.join(', ');
+  }
+
+  if (bodyLength > 0) {
+    sanitized['content-length'] = String(bodyLength);
+  }
+
+  return sanitized;
+}
+
+function getCrmNtlmBlockState(connector: Connector, username: string) {
+  const key = getCrmNtlmCircuitKey(connector.id, username);
+  const state = crmNtlmCircuit.get(key);
+  const now = Date.now();
+  pruneCrmNtlmFailures(now, state);
+  if (!state || !state.blockedUntil || state.blockedUntil <= now) {
+    if (state) crmNtlmCircuit.set(key, state);
+    return null;
+  }
+  crmNtlmCircuit.set(key, state);
+  return state;
+}
+
+function recordCrmNtlmFailure(connector: Connector, username: string, path: string, statusCode: number) {
+  if (isCrmNtlmNoisePath(path)) return;
+  const now = Date.now();
+  const key = getCrmNtlmCircuitKey(connector.id, username);
+  const state = crmNtlmCircuit.get(key) || { failures: [], blockedUntil: 0 };
+  pruneCrmNtlmFailures(now, state);
+  state.failures.push(now);
+  const count = state.failures.length;
+
+  if (count === 1) {
+    logSSO(connector.id, `[CRM-NTLM-401] Primer 401 para usuario=${username} path=${path}`);
+  } else {
+    logSSO(connector.id, `[CRM-NTLM-401] status=${statusCode} acumulado=${count} usuario=${username} path=${path}`);
+  }
+
+  if (count >= CRM_NTLM_FAIL_THRESHOLD) {
+    state.blockedUntil = now + CRM_NTLM_BLOCK_MS;
+    logSSO(connector.id, `[CRM-NTLM-BREAKER] Apertura por ${count} fallos NTLM para usuario=${username} path=${path} hasta=${new Date(state.blockedUntil).toISOString()}`);
+  }
+
+  crmNtlmCircuit.set(key, state);
+}
+
+function resetCrmNtlmFailureState(connector: Connector, username: string) {
+  const key = getCrmNtlmCircuitKey(connector.id, username);
+  const state = crmNtlmCircuit.get(key);
+  if (!state) return;
+  crmNtlmCircuit.delete(key);
+  if (state.failures.length > 0 || state.blockedUntil > 0) {
+    logSSO(connector.id, `[CRM-NTLM-BREAKER] Cierre y reset por respuesta exitosa para usuario=${username}`);
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -112,7 +230,7 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
       const parts = rawUrlPath.replace('/__bizguard_job/', '').split('/');
       const jobId = parts[0];
       const action = parts[1] || 'status';
-      const job = bgJobs.get(jobId);
+      const job = getBgJob(jobId);
       if (!job) {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Job no encontrado o expirado' }));
@@ -140,7 +258,7 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
         res.end(job.responseBody);
         
         // Liberar inmediatamente el buffer de la memoria eliminando el trabajo del mapa
-        bgJobs.delete(jobId);
+        deleteBgJob(jobId);
         return;
       }
       res.writeHead(404); res.end();
@@ -160,11 +278,14 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
     const isInternalAuth = connector.id === "internal-dashboard";
     const hostToSend = isInternalAuth ? incomingHost : targetUrl.host;
     const proto = (incomingHost.includes("localhost") || incomingHost.includes("127.0.0.1")) ? "http" : "https";
+    const effectiveReqUrl = connector.connectorType === "dynamics-crm"
+      ? normalizeDynamicsCrmProxyPath(req.url || "/", connector.entryPath)
+      : (req.url || "/");
 
     const options: http.RequestOptions = {
       hostname: targetUrl.hostname,
       port: targetUrl.port || (isHttps ? 443 : 80),
-      path: req.url,
+      path: effectiveReqUrl,
       method: req.method,
       headers: {
         ...headers,
@@ -186,25 +307,30 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
     let hbStart: number | null = null;
     let heartbeatEndEmitted = false;
 
-    const urlPart = (req.url || '').split('?')[0].toLowerCase();
+    const urlPart = effectiveReqUrl.split('?')[0].toLowerCase();
+    const path = effectiveReqUrl.split('?')[0];
     const rules = getRulesFor(connector.connectorType);
-    
+    const productConfig = getEffectiveProductConfig(connector);
     const isInternalConnector = connector.id === "internal-dashboard";
-    const isCrmResource = /(_imgs|_static|webresources|icon\.aspx|css\.aspx|js\.aspx|resx\.ashx)/i.test(urlPart);
-    const isExplicitStatic = /\.(js|css|axd|ashx|png|jpg|jpeg|gif|ico|woff|woff2|svg|svgz|ttf|otf|eot|cur|xaml|xap|map|wasm|mp4)$/.test(urlPart);
-    const isImage = /\.(png|jpg|jpeg|gif|ico|cur|svg)$/.test(urlPart) || urlPart.includes('icon.aspx');
-    const isStatic = isExplicitStatic || isCrmResource;
-    
-    const isPostLike = req.method !== 'GET' && req.method !== 'HEAD';
-    const hbEligible = !isInternalConnector && rules.isHbEligible(req, urlPart, isStatic, isImage);
-    const path = (req.url || '').split('?')[0];
-
-    const acceptHeader = (req.headers['accept'] || '').toLowerCase();
-    const secFetchMode = (req.headers['sec-fetch-mode'] || '').toLowerCase();
-    const isXhrHeader = !!req.headers['x-requested-with'];
-    const isAjax = isXhrHeader || 
-                   (secFetchMode !== '' && secFetchMode !== 'navigate') || 
-                   (acceptHeader !== '' && !acceptHeader.includes('text/html'));
+    const requestShape = classifyRequest(req, urlPart);
+    const { isImage, isStatic, isPostLike, isAjax, isMultipartUpload } = requestShape;
+    const hasForcedHeartbeatPath = matchesForcedHeartbeatPath(urlPart, connector.hbForceUrls);
+    const executionMode: ProductExecutionMode = isInternalConnector
+      ? "none"
+      : rules.resolveExecutionMode({
+          req,
+          connector,
+          urlPart,
+          path,
+          isStatic,
+          isImage,
+          isPostLike,
+          isAjax,
+          isMultipartUpload,
+          hasForcedHeartbeatPath,
+          productConfig,
+        });
+    const hbEligible = executionMode !== "none";
 
     // Helper para loguear eventos de debug en el traffic log unificado
     const logDebugEntry = (tag: string, extra?: string, status?: number | string, elapsedMs?: number) => {
@@ -225,7 +351,7 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
     };
 
     // Debug log de inicio de request
-    logDebugEntry('[REQUEST-IN]', `XHR=${isAjax} hbEligible=${hbEligible}`);
+    logDebugEntry('[REQUEST-IN]', `XHR=${isAjax} hbEligible=${hbEligible} forcedHB=${hasForcedHeartbeatPath} mode=${executionMode}`);
 
     const buildTrafficEntry = (opts: { elapsed: number; ttfb?: number; status: number; reqSize: number; resSize: number; err?: string; resHeaders?: Record<string, string | string[] | undefined> }): TrafficEntry | null => {
       const username = (req as any).session?.crmUser || (req as any).session?.coreUser || (req as any).session?.user?.email || (req as any).session?.user?.name || 'anonymous';
@@ -283,7 +409,7 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
 
 
       jobId = crypto.randomUUID();
-      bgJobs.set(jobId, {
+      setBgJob(jobId, {
         status: 'pending',
         startedAt: startTime,
         connectorId: connector.id,
@@ -313,10 +439,7 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
             elapsedMs: Date.now() - startTime,
           });
 
-          if (req.method === 'GET' || isPostLike) {
-            const isFullPageNav = !isAjax;
-            
-            if (isFullPageNav) {
+          if (executionMode === "passive-html") {
               // ── FULL-PAGE NAVIGATION ────────────────────────────────────────
               // Navegación real: escribimos spinner HTML y mantenemos vivo con espacios.
               // Los espacios van dentro de un comentario HTML (<!-- ... -->),
@@ -340,13 +463,14 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
                   if (hbInterval) clearInterval(hbInterval);
                 }
               }, HB_INTERVAL_MS);
-            } else {
+          } else if (executionMode === "xhr-keepalive") {
               // ── XHR / AJAX / FETCH ──────────────────────────────────────────
               // NO escribimos al body HTTP. El cliente espera JSON puro.
               // Usamos TCP socket keepalive para mantener viva la conexión
               // sin corromper el cuerpo de la respuesta.
-              logHB(`[HB-SHIELD] Pasivo (TCP-KA) ${path} | Iniciado tras ${Math.round((Date.now()-startTime)/1000)}s (${connector.id})`);
-              logDebugEntry('[HB-TCP-KA]', 'XHR mode — sin espacios en body', undefined, Date.now() - startTime);
+              const sentInterimPulse = emitInterimProcessingPulse(res);
+              logHB(`[HB-SHIELD] Pasivo (${sentInterimPulse ? 'HTTP-102/TCP-KA' : 'TCP-KA'}) ${path} | Iniciado tras ${Math.round((Date.now()-startTime)/1000)}s (${connector.id})`);
+              logDebugEntry('[HB-XHR-KA]', `XHR mode | interim102=${sentInterimPulse}`, undefined, Date.now() - startTime);
               try {
                 // setKeepAlive(true, delay_ms): el kernel envía TCP ACK/keepalive probes
                 // cada `delay_ms` ms, manteniendo vivo el socket ante firewalls/CDN.
@@ -354,19 +478,21 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
               } catch { /* socket puede no soportarlo en todos los entornos */ }
               hbInterval = setInterval(() => {
                 if (!res.writableEnded && !res.destroyed) {
+                  const pulseMode = emitInterimProcessingPulse(res) ? '102' : 'tcp-ka';
                   const elapsed = Math.round((Date.now() - startTime) / 1000);
-                  logHB(`[HB-SHIELD] ⏱ ${elapsed}s activa — ${path} (${connector.id})`);
+                  logHB(`[HB-SHIELD] ⏱ ${elapsed}s activa — ${path} (${connector.id}) [${pulseMode}]`);
                 } else {
                   if (hbInterval) clearInterval(hbInterval);
                 }
               }, HB_INTERVAL_MS);
               // No se llama a res.writeHead() aquí: la respuesta HTTP completa
               // (headers + body) será enviada cuando el backend responda.
-            }
-          } else {
+          } else if (executionMode === "background-job") {
             logHB(`[HB-SHIELD] Activo (Polling/Job) ${path} tras ${Math.round((Date.now()-startTime)/1000)}s (${connector.id})`);
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
             res.end(renderBgJobPage(jobId || 'error', req.headers['referer'] || '', incomingHost));
+          } else {
+            logHB(`[HB-SHIELD] Modo sin proteccion activa ${executionMode} para ${path} (${connector.id})`);
           }
         }
       }, remainingTime);
@@ -382,16 +508,13 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
         const body = Buffer.concat(bodyChunks);
         const method = (req.method || 'GET').toLowerCase();
         const ntlmFn = (httpntlm as any)[method] || httpntlm.get;
-        const validationUrl = buildCoreNtlmValidationUrl(connector);
+        const queryIdx = (req.url || "").indexOf("?");
+        const queryString = queryIdx !== -1 ? (req.url || "").substring(queryIdx) : "";
+        const validationUrl = buildCoreNtlmValidationUrl(connector) + queryString;
 
         if (hbEligible) startHbShield();
 
-        const ntlmHeaders: Record<string, string> = {};
-        for (const [k, v] of Object.entries(options.headers || {})) {
-          if (typeof v === 'string') ntlmHeaders[k] = v;
-          else if (Array.isArray(v)) ntlmHeaders[k] = v.join(', ');
-        }
-        if (body.length > 0) ntlmHeaders['content-length'] = String(body.length);
+        const ntlmHeaders = buildCrmNtlmHeaders(req.headers, body.length);
 
         ntlmFn({
           username: session.coreUser,
@@ -439,6 +562,9 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
             if (isText && responseBody.length > 0) {
               let bodyStr = responseBody.toString('utf8');
               bodyStr = applyDeepRewrite(bodyStr, targetUrl, incomingHost);
+              if (connector.connectorType === "dynamics-crm") {
+                bodyStr = rewriteDynamicsCrmClientConfig(bodyStr, incomingHost, proto, connector.entryPath);
+              }
               bodyStr = rules.rewriteBody(bodyStr);
               responseBody = Buffer.from(bodyStr, 'utf8');
             }
@@ -446,7 +572,6 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
             fwdHeaders['content-length'] = String(responseBody.length);
             res.writeHead(ntlmRes.statusCode, fwdHeaders);
             res.end(responseBody);
-
             logHarEntry(connector.id, connector.harLog, {
               startTime,
               elapsedMs: Date.now() - startTime,
@@ -469,12 +594,36 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
 
     // ─── NTLM HANDSHAKE ──────────────────────────────────────────────────────
     if ((connector.isNtlm || connector.connectorType === 'dynamics-crm') && session?.crmUser && session?.crmPass) {
+      if (session.crmConnectorId && session.crmConnectorId !== connector.id) {
+        logSSO(connector.id, `[CRM-NTLM-MISMATCH] sessionConnector=${session.crmConnectorId} requestConnector=${connector.id} user=${session.crmUser}`);
+        if (!res.headersSent) {
+          res.writeHead(409, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end('La sesión NTLM activa pertenece a otro conector CRM. Reingresa.');
+        }
+        return;
+      }
+
       const bodyChunks: Buffer[] = [];
       req.on('data', (chunk: Buffer) => bodyChunks.push(chunk));
       req.on('end', () => {
         const body = Buffer.concat(bodyChunks);
         const method = (req.method || 'GET').toLowerCase();
         const ntlmFn = (httpntlm as any)[method] || httpntlm.get;
+        const requestPath = effectiveReqUrl.split('?')[0] || '/';
+
+        const breakerState = getCrmNtlmBlockState(connector, session.crmUser);
+        if (breakerState && !isCrmNtlmNoisePath(requestPath)) {
+          const retryAfterSeconds = Math.max(1, Math.ceil((breakerState.blockedUntil - Date.now()) / 1000));
+          logSSO(connector.id, `[CRM-NTLM-BREAKER] Bloqueando intento NTLM para usuario=${session.crmUser} path=${requestPath} retryAfter=${retryAfterSeconds}s`);
+          if (!res.headersSent) {
+            res.writeHead(429, {
+              'Content-Type': 'text/plain; charset=utf-8',
+              'Retry-After': String(retryAfterSeconds),
+            });
+            res.end('BizGuard detuvo temporalmente nuevos intentos NTLM para proteger la cuenta AD. Reintenta en unos minutos.');
+          }
+          return;
+        }
 
         if (hbEligible) startHbShield();
 
@@ -485,14 +634,31 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
         }
         if (body.length > 0) ntlmHeaders['content-length'] = String(body.length);
 
+        // NTLM necesita conservar la misma conexión dentro del handshake
+        // (Type1/Type2/Type3), pero no debe compartirla con otros requests paralelos.
+        // Por eso usamos un agent dedicado por request con keepAlive=true y maxSockets=1.
+        const ntlmAgent = isHttps
+          ? new https.Agent({
+              keepAlive: true,
+              maxSockets: 1,
+              maxFreeSockets: 0,
+              rejectUnauthorized: connector.strictTls === true,
+            })
+          : new http.Agent({
+              keepAlive: true,
+              maxSockets: 1,
+              maxFreeSockets: 0,
+            });
+
         ntlmFn({
           username: session.crmUser, password: session.crmPass,
           domain: session.crmDomain || connector.ntlmDomain || "",
-          workstation: '', url: `${targetUrl.protocol}//${targetUrl.host}${req.url}`,
-          body, headers: ntlmHeaders, agent, timeout: 15000, binary: true,
+          workstation: '', url: `${targetUrl.protocol}//${targetUrl.host}${effectiveReqUrl}`,
+          body, headers: ntlmHeaders, agent: ntlmAgent, timeout: 15000, binary: true,
         }, (err: any, ntlmRes: any) => {
           if (hbTimer) clearTimeout(hbTimer);
           if (hbInterval) clearInterval(hbInterval);
+          ntlmAgent.destroy();
 
           if (err) {
             logHB(`[NTLM-ERR] ${req.method} ${req.url} → ${err.message}`);
@@ -545,6 +711,9 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
             if (isText && responseBody.length > 0) {
               let bodyStr = responseBody.toString('utf8');
               bodyStr = applyDeepRewrite(bodyStr, targetUrl, incomingHost);
+              if (connector.connectorType === "dynamics-crm") {
+                bodyStr = rewriteDynamicsCrmClientConfig(bodyStr, incomingHost, proto, connector.entryPath);
+              }
               bodyStr = rules.rewriteBody(bodyStr);
               responseBody = Buffer.from(bodyStr, 'utf8');
             }
@@ -593,6 +762,11 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
               resBody: responseBody,
               username: session.crmUser
             });
+            if (ntlmRes.statusCode === 401) {
+              recordCrmNtlmFailure(connector, session.crmUser, requestPath, ntlmRes.statusCode);
+            } else if (ntlmRes.statusCode && ntlmRes.statusCode < 400) {
+              resetCrmNtlmFailureState(connector, session.crmUser);
+            }
             if (connector.trafficLog) {
               const te = buildTrafficEntry({ elapsed: Date.now() - startTime, status: ntlmRes.statusCode, reqSize: body.length, resSize: responseBody.length, resHeaders: fwdHeaders });
               if (te) trafficLogger.log(te);
@@ -650,7 +824,13 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
           res.write(rules.getRedirectScript(location, isHtmlCommentOpen));
           res.end();
           if (jobId) {
-            bgJobs.set(jobId, { ...bgJobs.get(jobId)!, status: 'done', statusCode: 200, responseHeaders: finalHeaders, responseBody: Buffer.alloc(0) });
+            updateBgJob(jobId, (job) => ({
+              ...job,
+              status: 'done',
+              statusCode: 200,
+              responseHeaders: finalHeaders,
+              responseBody: Buffer.alloc(0),
+            }));
           }
           logHarEntry(connector.id, connector.harLog, {
             startTime,
@@ -781,9 +961,15 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
 
           if (jobId) {
             if (isHeartbeatActive) {
-              bgJobs.set(jobId, { ...bgJobs.get(jobId)!, status: 'done', statusCode: proxyRes.statusCode, responseHeaders: finalHeaders, responseBody: buffer });
+              updateBgJob(jobId, (job) => ({
+                ...job,
+                status: 'done',
+                statusCode: proxyRes.statusCode,
+                responseHeaders: finalHeaders,
+                responseBody: buffer,
+              }));
             } else {
-              bgJobs.delete(jobId);
+              deleteBgJob(jobId);
             }
           }
 
@@ -820,9 +1006,15 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
           res.end();
           if (jobId) {
             if (isHeartbeatActive) {
-              bgJobs.set(jobId, { ...bgJobs.get(jobId)!, status: 'done', statusCode: proxyRes.statusCode, responseHeaders: finalHeaders, responseBody: Buffer.alloc(0) });
+              updateBgJob(jobId, (job) => ({
+                ...job,
+                status: 'done',
+                statusCode: proxyRes.statusCode,
+                responseHeaders: finalHeaders,
+                responseBody: Buffer.alloc(0),
+              }));
             } else {
-              bgJobs.delete(jobId);
+              deleteBgJob(jobId);
             }
           }
           logHarEntry(connector.id, connector.harLog, {
@@ -861,9 +1053,13 @@ export function createProxyServer(connector: Connector, onMetric: MetricCallback
       });
       if (jobId) {
         if (isHeartbeatActive) {
-          bgJobs.set(jobId, { ...bgJobs.get(jobId)!, status: 'error', error: e.message });
+          updateBgJob(jobId, (job) => ({
+            ...job,
+            status: 'error',
+            error: e.message,
+          }));
         } else {
-          bgJobs.delete(jobId);
+          deleteBgJob(jobId);
         }
       }
       if (connector.trafficLog) {

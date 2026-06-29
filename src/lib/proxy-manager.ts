@@ -373,8 +373,20 @@ class ProxyManager extends EventEmitter {
       const currentConnectors = (await getConnectors()).filter(c => c.port === port);
       const settings = await getSettings();
 
-      if (url.startsWith("/api/auth") || url.startsWith("/api/stats") || url.startsWith("/login") || url.includes("_next") || url.includes("favicon")) {
+      // Rutas internas de BizGuard: solo las rutas exactas del dashboard/auth,
+      // NO usar startsWith("/login") a secas porque captura URLs del backend como /loginexterno.aspx
+      const urlPath = url.split("?")[0].toLowerCase();
+      const isInternalRoute = url.startsWith("/api/auth") ||
+        url.startsWith("/api/stats") ||
+        url.includes("_next") ||
+        url.includes("favicon") ||
+        urlPath === "/login" ||
+        urlPath.startsWith("/login/");
+      if (isInternalRoute) {
         const DASH_ID = "internal-dashboard";
+        const isLocalDashboardHost = hostHeader.includes("localhost") || hostHeader.includes("127.0.0.1");
+        req.headers["x-forwarded-host"] = hostHeader;
+        req.headers["x-forwarded-proto"] = isLocalDashboardHost ? "http" : "https";
         if (!this.proxyServers.has(DASH_ID)) {
           const dashConnector = {
             id: DASH_ID,
@@ -440,6 +452,9 @@ class ProxyManager extends EventEmitter {
             const protocol = isLocal ? "http" : "https";
             // Si el conector tiene entryPath y el usuario visita /, usar entryPath como destino post-login
             const targetPath = (url === '/' && connector?.entryPath) ? connector.entryPath : url;
+            // callbackUrl debe reflejar el origen exacto con el que entró el usuario.
+            // auth.ts puede corregir hosts internos, pero no debe canonizar este valor
+            // a publicHost cuando el acceso real fue por localhost.
             const absoluteCallback = `${protocol}://${hostHeader}${targetPath}`;
 
             if (needsCoreNtlmSession && connector) {
@@ -452,7 +467,7 @@ class ProxyManager extends EventEmitter {
 
             // NTLM sin SSO → formulario de credenciales de red
             const loginUrl = needsSessionForNtlm && !requiresAuth
-              ? `/login/ntlm?callbackUrl=${encodeURIComponent(absoluteCallback)}`
+              ? `/login/ntlm?callbackUrl=${encodeURIComponent(absoluteCallback)}&connectorId=${encodeURIComponent(connector?.id || "")}`
               : `/api/auth/signin?callbackUrl=${encodeURIComponent(absoluteCallback)}`;
 
             this.log(`[BIZGUARD-Auth] No session for ${url}. Redirecting to: ${loginUrl}`, "info");
@@ -473,14 +488,14 @@ class ProxyManager extends EventEmitter {
           }
 
           // Sesión SSO activa pero NTLM también requerido y sin credenciales CRM → pedir NTLM
-          if (needsSessionForNtlm && !session.crmUser) {
+          if (needsSessionForNtlm && (!session.crmUser || session.crmConnectorId !== connector?.id)) {
             if (!url.startsWith('/api/') || url.startsWith('/api/auth')) {
               const isLocal = hostHeader.includes("localhost") || hostHeader.includes("127.0.0.1");
               const protocol = isLocal ? "http" : "https";
               const targetPath = (url === '/' && connector?.entryPath) ? connector.entryPath : url;
               const absoluteCallback = `${protocol}://${hostHeader}${targetPath}`;
-              const ntlmUrl = `/login/ntlm?callbackUrl=${encodeURIComponent(absoluteCallback)}`;
-              this.log(`[BIZGUARD-Auth] SSO ok but NTLM credentials missing for ${url}. Redirecting to: ${ntlmUrl}`, "info");
+              const ntlmUrl = `/login/ntlm?callbackUrl=${encodeURIComponent(absoluteCallback)}&connectorId=${encodeURIComponent(connector?.id || "")}`;
+              this.log(`[BIZGUARD-Auth] SSO ok but NTLM credentials missing or bound to another connector for ${url}. Redirecting to: ${ntlmUrl}`, "info");
               res.writeHead(302, { Location: ntlmUrl });
               res.end();
               return;
@@ -602,7 +617,14 @@ class ProxyManager extends EventEmitter {
       });
 
       backendSocket.on('error', (err: Error) => {
-        this.log(`[WS-PROXY] Error backend: ${err.message} (${connector!.id})`, 'error');
+        // ECONNRESET/EPIPE/ECONNREFUSED son cierres normales de SignalR/WebSocket
+        // (el servidor resetea conexiones inactivas y el cliente reconecta solo).
+        // No loguear como error para evitar falsa alarma.
+        const code = (err as any).code || '';
+        const isExpectedClose = code === 'ECONNRESET' || code === 'EPIPE' || code === 'ECONNREFUSED';
+        if (!isExpectedClose) {
+          this.log(`[WS-PROXY] Error backend: ${err.message} (${connector!.id})`, 'error');
+        }
         if (!socket.destroyed) socket.destroy();
       });
 

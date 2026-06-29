@@ -7,6 +7,7 @@ import { ntlmSignIn } from "./actions";
 function NtlmLoginForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams?.get("callbackUrl") || "/";
+  const connectorId = searchParams?.get("connectorId") || "";
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -19,7 +20,7 @@ function NtlmLoginForm() {
     const password = (form.elements.namedItem("password") as HTMLInputElement).value;
     const domain = (form.elements.namedItem("domain") as HTMLInputElement).value;
 
-    const result = await ntlmSignIn(username, password, domain);
+    const result = await ntlmSignIn(username, password, domain, connectorId);
 
     if (result.ok) {
       window.location.href = callbackUrl;
