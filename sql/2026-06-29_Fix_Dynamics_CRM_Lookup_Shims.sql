@@ -1,0 +1,19 @@
+-- Fecha: 2026-06-29
+-- Modulo: dynamics-crm
+-- Implementacion: Fix Dynamics CRM Lookup Shims
+--
+-- Esta implementacion no requirio cambios sobre base de datos.
+-- Se deja este archivo como registro formal para mantener trazabilidad
+-- sincronizada entre las carpetas `context` y `sql`.
+--
+-- Hallazgos relevantes:
+-- 1. El problema original estaba en la navegacion cliente del lookup CRM.
+-- 2. Un primer parche inyecto script en assets JS como global.ashx y rompio el runtime.
+-- 3. El ajuste final restringio la inyeccion solo a HTML real con lookup grid CRM.
+--
+-- Archivos de codigo afectados:
+-- - src/lib/dynamics-crm.ts
+-- - tests/dynamics-crm.test.ts
+--
+-- Verificacion ejecutada:
+-- node --test tests/dynamics-crm.test.ts
