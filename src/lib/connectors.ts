@@ -1,7 +1,15 @@
-import { connectorsDb, isBuildPhase } from './db';
-import fs from 'fs/promises';
-import path from 'path';
-import { buildDefaultProductConfig, ConnectorProductType, normalizeConnectorProductType, ProductConfig } from './product-catalog';
+import { isBuildPhase } from './db';
+import { type ConnectorProductType, type ProductConfig } from './product-catalog';
+import { createConnectorsMigrationRunner } from './connectors-migration';
+import { normalizeConnector } from './connectors-normalize';
+import {
+  deleteConnectorRecord,
+  findAllConnectors,
+  findConnectorByIdRecord,
+  insertConnectorRecord,
+  reloadConnectorsDb,
+  updateConnectorRecord,
+} from './connectors-store';
 
 export interface Connector {
   id: string;
@@ -20,13 +28,13 @@ export interface Connector {
   ntlmDomain?: string;
   coreNtlmDomain?: string;
   entryPath?: string;
-  harLog?: boolean; // Si true, escribe un log tipo HAR en logs/har/{id}/YYYY-MM-DD.jsonl
-  trafficLog?: boolean; // Si true, escribe un log de tráfico en logs/traffic/{id}/
-  ssoLog?: boolean; // Si true, escribe un log de SSO en logs/sso/{id}/YYYY-MM-DD.log
-  hbLog?: boolean; // Si true, escribe un log de Heartbeat en logs/hb/{id}/YYYY-MM-DD.log
-  hbFirstPulse?: number; // Umbral opcional de activación del heartbeat en segundos
-  trafficRetentionValue?: number; // Valor de retención de logs de tráfico
-  trafficRetentionUnit?: 'seconds' | 'minutes' | 'hours' | 'days'; // Unidad de retención de logs de tráfico
+  harLog?: boolean;
+  trafficLog?: boolean;
+  ssoLog?: boolean;
+  hbLog?: boolean;
+  hbFirstPulse?: number;
+  trafficRetentionValue?: number;
+  trafficRetentionUnit?: 'seconds' | 'minutes' | 'hours' | 'days';
   stats?: {
     requests: number;
     bytes: number;
@@ -36,86 +44,45 @@ export interface Connector {
   };
 }
 
-const CONNECTORS_FILE = path.join(process.cwd(), 'src/data/connectors.json');
-
 let migrationPromise: Promise<void> | null = null;
 
-// Migración inicial de JSON a NeDB (solo si la DB está vacía)
-async function migrateIfNeeded() {
-  if (isBuildPhase()) return;
-  try {
-    const count = await connectorsDb.countAsync({});
-    if (count === 0) {
-      const data = await fs.readFile(CONNECTORS_FILE, 'utf8');
-      const connectors = JSON.parse(data);
-      if (Array.isArray(connectors) && connectors.length > 0) {
-        await connectorsDb.insertAsync(connectors);
-        console.log(`[DB] Migrados ${connectors.length} conectores desde JSON a NeDB.`);
-      }
-    }
-  } catch (error) {
-    // Si falla la lectura del JSON o ya no existe, seguimos adelante
-  }
-}
-
-// Inicializar la migración una sola vez
 if (!migrationPromise) {
-  migrationPromise = migrateIfNeeded();
+  migrationPromise = createConnectorsMigrationRunner();
 }
 
 export async function getConnectors(): Promise<Connector[]> {
   if (isBuildPhase()) return [];
   if (migrationPromise) await migrationPromise;
-  
-  // Forzar recarga desde disco para evitar datos cacheados obsoletos en modo multi-worker de Next.js
-  try {
-    await connectorsDb.loadDatabaseAsync();
-  } catch(e) { /* ignorar ENOENT de concurrencia */ }
-  
-  const connectors = (await connectorsDb.findAsync({})) as unknown as Connector[];
+
+  await reloadConnectorsDb();
+  const connectors = await findAllConnectors();
   return connectors.map(normalizeConnector);
 }
 
-export async function addConnector(connector: Omit<Connector, 'isActive'>) {
+export async function addConnector(connector: Omit<Connector, 'isActive'>): Promise<Connector> {
   const newConnector: Connector = normalizeConnector({ ...connector, isActive: true });
-  await connectorsDb.insertAsync(newConnector);
+  await insertConnectorRecord(newConnector);
   return newConnector;
 }
 
 export async function getConnectorById(id: string): Promise<Connector | undefined> {
   if (isBuildPhase()) return undefined;
-  try { await connectorsDb.loadDatabaseAsync(); } catch(e) {}
-  const connector = await connectorsDb.findOneAsync({ id });
-  return connector ? normalizeConnector(connector as unknown as Connector) : undefined;
+
+  await reloadConnectorsDb();
+  const connector = await findConnectorByIdRecord(id);
+  return connector ? normalizeConnector(connector) : undefined;
 }
 
-export async function updateConnector(id: string, updates: Partial<Omit<Connector, 'id'>>) {
+export async function updateConnector(
+  id: string,
+  updates: Partial<Omit<Connector, 'id'>>,
+): Promise<Connector | undefined> {
   const current = await getConnectorById(id);
   const normalizedUpdates = current ? normalizeConnector({ ...current, ...updates, id }) : updates;
-  await connectorsDb.updateAsync({ id }, { $set: normalizedUpdates }, {});
+  await updateConnectorRecord(id, normalizedUpdates);
   return await getConnectorById(id);
 }
 
-export async function deleteConnector(id: string) {
-  await connectorsDb.removeAsync({ id }, {});
-}
-
-function normalizeConnector(connector: Connector): Connector {
-  const connectorType = normalizeConnectorProductType(connector.connectorType);
-  return {
-    ...connector,
-    connectorType,
-    productConfig: normalizeProductConfig(connector.productConfig, connectorType),
-  };
-}
-
-function normalizeProductConfig(productConfig: ProductConfig | undefined, connectorType: ConnectorProductType): ProductConfig {
-  return {
-    ...buildDefaultProductConfig(connectorType),
-    ...(productConfig || {}),
-    [connectorType]: {
-      ...buildDefaultProductConfig(connectorType)[connectorType],
-      ...(productConfig?.[connectorType] || {}),
-    },
-  };
+export async function deleteConnector(id: string): Promise<void> {
+  await deleteConnectorRecord(id);
 }

@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveLoginEntry } from "../src/lib/login-entry";
+import {
+  buildConnectorAbsoluteCallbackUrl,
+  resolveConnectorCallbackTargetPath,
+  resolveLoginEntry,
+} from "../src/lib/login-entry";
 import type { Connector } from "../src/lib/connectors";
 import type { GlobalSettings } from "../src/lib/settings";
 
@@ -69,4 +73,52 @@ test("cloudflare conserva callback publico cuando el request llega con forwarded
 
   assert.equal(result.shouldBypassSso, false);
   assert.equal(result.effectiveCallbackUrl, "https://dominio.com/menu");
+});
+
+test("login sin callback usa entryPath normalizado desde el perfil del conector", () => {
+  const connector = makeConnector({
+    connectorType: "dynamics-crm",
+    entryPath: "ARTTesting",
+  });
+  const result = resolveLoginEntry({
+    requestHost: "crm.example.com",
+    connectors: [connector],
+    settings: baseSettings,
+    fallbackAuthUrl: "http://localhost:3000",
+  });
+
+  assert.equal(result.effectiveCallbackUrl, "https://crm.example.com/ARTTesting");
+});
+
+test("callback absoluto usa entryPath del perfil cuando el request entra por raiz", () => {
+  const connector = makeConnector({
+    connectorType: "dynamics-crm",
+    entryPath: "ARTTesting",
+  });
+
+  assert.equal(resolveConnectorCallbackTargetPath("/", connector), "/ARTTesting");
+  assert.equal(
+    buildConnectorAbsoluteCallbackUrl({
+      host: "crm.example.com",
+      requestUrl: "/",
+      connector,
+    }),
+    "https://crm.example.com/ARTTesting",
+  );
+});
+
+test("callback absoluto preserva localhost para bypass y logins locales", () => {
+  const connector = makeConnector({
+    connectorType: "core",
+    entryPath: "/inicio",
+  });
+
+  assert.equal(
+    buildConnectorAbsoluteCallbackUrl({
+      host: "localhost:8081",
+      requestUrl: "/operaciones",
+      connector,
+    }),
+    "http://localhost:8081/operaciones",
+  );
 });

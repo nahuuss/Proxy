@@ -3,7 +3,19 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Connector } from "@/lib/connectors";
-import { ConnectorProductType, PRODUCT_CATALOG, normalizeConnectorProductType } from "@/lib/product-catalog";
+import {
+  ConnectorProductType,
+  DEFAULT_PRODUCT_TYPE,
+  PRODUCT_CATALOG,
+  normalizeConnectorProductType,
+} from "@/lib/product-catalog";
+import {
+  getProductBadgeLabel,
+  getProductFieldPresentation,
+  getProductProfile,
+  isConnectorNtlmActive,
+  requiresConnectorNtlmDomain,
+} from "@/lib/product-profiles";
 import { updateConnectorAction, toggleConnectorAction, deleteConnectorAction } from "@/app/actions";
 import { Server, Settings2, Pause, Play, Activity, X, Save, ExternalLink, ShieldOff, Trash2 } from "lucide-react";
 import { useStats } from "@/contexts/StatsContext";
@@ -11,7 +23,7 @@ import { useStats } from "@/contexts/StatsContext";
 const CONNECTOR_TYPES = PRODUCT_CATALOG;
 
 function ConnectorTypeSection({ connectorType, onChange }: { connectorType?: string; onChange?: (type: string) => void }) {
-  const current = connectorType || 'generic';
+  const current = connectorType || DEFAULT_PRODUCT_TYPE;
   return (
     <div>
       <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Tipo de producto</label>
@@ -33,7 +45,17 @@ function ConnectorTypeSection({ connectorType, onChange }: { connectorType?: str
   );
 }
 
-function DynamicsCrmSection({ ntlmEnabled, onNtlmChange, ntlmDomain }: { ntlmEnabled: boolean; onNtlmChange: (v: boolean) => void; ntlmDomain?: string }) {
+function NtlmSection({
+  ntlmEnabled,
+  onNtlmChange,
+  ntlmDomain,
+  showToggle,
+}: {
+  ntlmEnabled: boolean;
+  onNtlmChange: (v: boolean) => void;
+  ntlmDomain?: string;
+  showToggle: boolean;
+}) {
   return (
     <div className="rounded-lg border border-outline-variant/10 bg-surface-container-lowest overflow-hidden">
       <div className="flex items-start gap-4 p-4">
@@ -44,10 +66,14 @@ function DynamicsCrmSection({ ntlmEnabled, onNtlmChange, ntlmDomain }: { ntlmEna
             El proxy completa el handshake NTLM con Active Directory.
           </p>
         </div>
-        <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
-          <input type="checkbox" name="isNtlm" checked={ntlmEnabled} onChange={e => onNtlmChange(e.target.checked)} className="sr-only peer" />
-          <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-primary peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
-        </label>
+        {showToggle ? (
+          <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+            <input type="checkbox" name="isNtlm" checked={ntlmEnabled} onChange={e => onNtlmChange(e.target.checked)} className="sr-only peer" />
+            <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-primary peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
+          </label>
+        ) : (
+          <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Obligatorio</span>
+        )}
       </div>
       {ntlmEnabled && (
         <div className="px-4 pb-4">
@@ -72,7 +98,7 @@ export function ConnectorRow({
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [selectedType, setSelectedType] = useState<ConnectorProductType>(normalizeConnectorProductType(connector.connectorType));
-  const [ntlmEnabled, setNtlmEnabled] = useState(connector.isNtlm === true);
+  const [ntlmEnabled, setNtlmEnabled] = useState(isConnectorNtlmActive(connector));
   const [coreNtlmDomain, setCoreNtlmDomain] = useState(connector.coreNtlmDomain || "");
   const [harLog, setHarLog] = useState(connector.harLog === true);
   const [trafficLog, setTrafficLog] = useState(connector.trafficLog === true);
@@ -81,11 +107,17 @@ export function ConnectorRow({
   const [hbFirstPulse, setHbFirstPulse] = useState(connector.hbFirstPulse !== undefined ? String(connector.hbFirstPulse) : "");
   const [trafficRetentionValue, setTrafficRetentionValue] = useState(connector.trafficRetentionValue !== undefined ? String(connector.trafficRetentionValue) : "");
   const [trafficRetentionUnit, setTrafficRetentionUnit] = useState(connector.trafficRetentionUnit || "hours");
+  const selectedProfile = getProductProfile(selectedType);
+  const productBadge = getProductBadgeLabel(selectedType);
+  const fieldPresentation = getProductFieldPresentation(selectedType);
 
   const handleTypeChange = (type: string) => {
-    setSelectedType(normalizeConnectorProductType(type));
-    if (type === 'dynamics-crm') setNtlmEnabled(true);
-    if (type === 'core') setNtlmEnabled(false);
+    const normalizedType = normalizeConnectorProductType(type);
+    setSelectedType(normalizedType);
+    const nextProfile = getProductProfile(normalizedType);
+    if (!nextProfile.supports.ntlmToggle) {
+      setNtlmEnabled(isConnectorNtlmActive({ connectorType: normalizedType, isNtlm: false }));
+    }
   };
   const { connectors } = useStats();
   const stats = connectors[connector.id] || connector.stats || { requests: 0, bytes: 0, latency: 0, activePing: undefined, isOnline: undefined };
@@ -137,7 +169,7 @@ export function ConnectorRow({
 
   const tabs = [
     { id: 'general' as const,     label: 'General',   badge: null },
-    { id: 'producto' as const,    label: 'Producto',  badge: selectedType !== 'generic' ? selectedType === 'dynamics-crm' ? 'CRM' : selectedType.charAt(0).toUpperCase() + selectedType.slice(1) : null },
+    { id: 'producto' as const,    label: 'Producto',  badge: productBadge },
     { id: 'seguridad' as const,   label: 'Seguridad', badge: (bypassAuth || ntlmEnabled) ? '!' : null },
     { id: 'diagnostico' as const, label: 'Diagnóstico', badge: (trafficLog || harLog || ssoLog || hbLog) ? 'LOGS' : null },
   ];
@@ -244,7 +276,7 @@ export function ConnectorRow({
 
             <div className={`px-6 py-5 space-y-4 ${activeTab === 'producto' ? '' : 'hidden'}`}>
               <ConnectorTypeSection connectorType={selectedType} onChange={handleTypeChange} />
-              <div className={selectedType === 'core' ? '' : 'hidden'}>
+              <div className={selectedProfile.supports.coreNtlmDomain ? '' : 'hidden'}>
                 <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Dominio NTLM Core</label>
                 <input
                   name="coreNtlmDomain"
@@ -254,14 +286,14 @@ export function ConnectorRow({
                   className="w-full bg-surface-container-lowest border border-transparent text-on-surface text-sm py-3 px-4 rounded-lg focus:border-primary/50 outline-none mt-1"
                 />
                 <p className="font-body text-[10px] text-on-surface-variant mt-1.5">
-                  Dominio usado exclusivamente por el login NTLM de Core en <code className="bg-surface-container px-1 rounded">/LoginExterno.aspx</code>.
+                  {fieldPresentation.coreNtlmDomainHelp}
                 </p>
               </div>
-              <div className={selectedType === 'dynamics-crm' ? '' : 'hidden'}>
-                <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Ruta de organización</label>
-                <input name="entryPath" defaultValue={connector.entryPath || ""} placeholder="/NOMBREORG/" className="w-full bg-surface-container-lowest border border-transparent text-on-surface text-sm py-3 px-4 rounded-lg focus:border-primary/50 outline-none mt-1" />
+              <div className={selectedProfile.supports.entryPath ? '' : 'hidden'}>
+                <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{fieldPresentation.entryPathLabel}</label>
+                <input name="entryPath" defaultValue={connector.entryPath || ""} placeholder={fieldPresentation.entryPathPlaceholder} className="w-full bg-surface-container-lowest border border-transparent text-on-surface text-sm py-3 px-4 rounded-lg focus:border-primary/50 outline-none mt-1" />
                 <p className="font-body text-[10px] text-on-surface-variant mt-1.5">
-                  Ruta base de la organización CRM. Ej: <code className="bg-surface-container px-1 rounded">/SERENAART/</code> o <code className="bg-surface-container px-1 rounded">/Inicio/</code>. El usuario es redirigido aquí tras el login.
+                  {fieldPresentation.entryPathHelp}
                 </p>
               </div>
             </div>
@@ -280,8 +312,13 @@ export function ConnectorRow({
                   <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-error peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
                 </label>
               </div>
-              {selectedType !== 'core' && (
-                <DynamicsCrmSection ntlmEnabled={ntlmEnabled} onNtlmChange={setNtlmEnabled} ntlmDomain={connector.ntlmDomain} />
+              {selectedProfile.supports.ntlmDomain && requiresConnectorNtlmDomain({ connectorType: selectedType, isNtlm: ntlmEnabled }) && (
+                <NtlmSection
+                  ntlmEnabled={ntlmEnabled}
+                  onNtlmChange={setNtlmEnabled}
+                  ntlmDomain={connector.ntlmDomain}
+                  showToggle={selectedProfile.supports.ntlmToggle}
+                />
               )}
             </div>
 

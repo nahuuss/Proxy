@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { rewriteDynamicsCrmClientConfig } from "../src/lib/dynamics-crm.ts";
+import { rewriteDynamicsCrmClientConfig } from "../src/lib/dynamics-crm";
 
 test("dynamics crm reescribe variables cliente e inyecta shim de lookup", () => {
   const html = [

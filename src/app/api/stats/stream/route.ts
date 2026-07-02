@@ -1,10 +1,15 @@
 import { proxyManager } from "@/lib/proxy-manager";
-import fs from "fs";
-import path from "path";
+import { requireAdminRouteAccess } from "@/lib/admin-route";
+import { readProxySyncPayload } from "@/lib/proxy-sync-store";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const unauthorized = await requireAdminRouteAccess();
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -34,19 +39,14 @@ export async function GET() {
       // Poll sync.json para soportar multi-worker
       let lastStatsStr = "";
       const syncInterval = setInterval(() => {
-        try {
-          const fp = path.join(process.cwd(), 'data', 'sync.json');
-          if (fs.existsSync(fp)) {
-            const payload = JSON.parse(fs.readFileSync(fp, 'utf8'));
-            if (payload.stats) {
-              const currentStr = JSON.stringify(payload.stats);
-              if (currentStr !== lastStatsStr) {
-                onStats(payload.stats);
-                lastStatsStr = currentStr;
-              }
-            }
+        const payload = readProxySyncPayload();
+        if (payload?.stats) {
+          const currentStr = JSON.stringify(payload.stats);
+          if (currentStr !== lastStatsStr) {
+            onStats(payload.stats);
+            lastStatsStr = currentStr;
           }
-        } catch(e) {}
+        }
       }, 500);
 
       (controller as any)._cleanup = () => {

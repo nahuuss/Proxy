@@ -1,6 +1,6 @@
 import http from "http";
 import { Connector } from "../connectors";
-import { getEffectiveProductConfig, ProductBehaviorConfig, ProductExecutionMode } from "../product-catalog";
+import { ProductBehaviorConfig, ProductExecutionMode } from "../product-schema";
 
 export interface RequestContext {
   req: http.IncomingMessage;
@@ -68,11 +68,6 @@ export abstract class BaseRules implements ConnectorRules {
     if (ctx.isPostLike) return "background-job";
     return "passive-html";
   }
-
-  protected getEffectiveProductConfig(connector: Connector) {
-    return getEffectiveProductConfig(connector);
-  }
-
   rewriteBody(body: string): string {
     return body; // Por defecto no hace nada
   }

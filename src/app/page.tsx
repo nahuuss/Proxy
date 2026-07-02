@@ -1,4 +1,3 @@
-import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { getConnectors } from "@/lib/connectors";
 import { AddConnectorForm } from "@/components/AddConnectorForm";
@@ -7,29 +6,22 @@ import { PingPanel } from "@/components/PingPanel";
 import { X } from "lucide-react";
 import Link from "next/link";
 import { headers } from "next/headers";
-import { getSettings } from "@/lib/settings";
+import { getAdminAccessState } from "@/lib/admin-access";
 
 // BizGuard V1.2.1 - Core Refresh
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | undefined }> }) {
   const params = await searchParams;
   const isAdding = params?.action === "add";
   
-  const settings = await getSettings();
-  let isBypass = settings.bypassAuth;
-  
+  const { hasAccess } = await getAdminAccessState();
   const headersList = await headers();
   const host = headersList.get("host") || "";
   const forwardedProto = headersList.get("x-forwarded-proto") || "";
   const dashboardProtocol = host.includes("localhost") || host.includes("127.0.0.1")
     ? "http"
     : ((forwardedProto === "http" || forwardedProto === "https") ? forwardedProto : "https");
-  if (host.includes(":3000")) {
-    isBypass = true;
-  }
 
-  const session = isBypass ? null : await auth();
-  
-  if (!isBypass && !session) {
+  if (!hasAccess) {
     redirect("/api/auth/signin");
   }
 

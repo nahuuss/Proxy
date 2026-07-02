@@ -18,6 +18,7 @@
 /out/
 /.next_old/
 /BizGuard/.next/
+/Dist/**/.next/
 
 # production
 /build
@@ -47,3 +48,30 @@ next-env.d.ts
 /logs/
 /logsdebug/
 /BizGuard/logs/
+/BizGuard/**/logs/
+
+# local runtime / packaged copies
+/BizGuard/node_modules/
+/BizGuard/.env
+/BizGuard/.env.*
+/Dist/
+
+# analysis / diagnostics
+/analizar/
+*.har
+*.jsonl
+
+# local state
+/data/sync.json
+
+# scratch artifacts
+/scratch/*.har
+/scratch/*.html
+/scratch/*origin*
+/scratch/*proxy*
+/scratch/*login*
+/scratch/analizar_*.js
+/scratch/buscar_*.js
+/scratch/guardar_*.js
+/scratch/kill_*.js
+/scratch/limpiar_*.js

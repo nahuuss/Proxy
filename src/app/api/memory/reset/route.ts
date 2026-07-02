@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { forceMemoryReset } from "@/lib/db";
+import { requireAdminRouteAccess } from "@/lib/admin-route";
 
 export async function POST() {
+  const unauthorized = await requireAdminRouteAccess();
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   try {
     await forceMemoryReset();
     return NextResponse.json({ success: true, lastMemoryReset: Date.now() });

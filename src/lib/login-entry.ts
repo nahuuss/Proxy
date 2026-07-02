@@ -1,6 +1,7 @@
 import type { Connector } from "./connectors";
 import type { GlobalSettings } from "./settings";
-import { isLocalHostname, resolveAuthOrigin } from "./auth-origin";
+import { isLocalHost, isLocalHostname, resolveAuthOrigin } from "./auth-origin";
+import { resolveRootEntryPathForConnector } from "./product-profiles";
 
 export interface ResolveLoginEntryInput {
   callbackUrl?: string | null;
@@ -25,9 +26,25 @@ function buildOrigin(protocol: string, host: string): string {
 }
 
 function buildDefaultReturnUrl(protocol: string, host: string, connector?: Connector): string {
-  const entryPath = connector?.entryPath?.trim() || "/";
-  const normalizedPath = entryPath.startsWith("/") ? entryPath : `/${entryPath}`;
-  return `${buildOrigin(protocol, host)}${normalizedPath}`;
+  const entryPath = connector ? (resolveRootEntryPathForConnector(connector) || "/") : "/";
+  return `${buildOrigin(protocol, host)}${entryPath}`;
+}
+
+export function resolveConnectorCallbackTargetPath(requestUrl: string, connector?: Pick<Connector, "connectorType" | "entryPath">): string {
+  if (requestUrl !== "/" || !connector) {
+    return requestUrl;
+  }
+  return resolveRootEntryPathForConnector(connector) || requestUrl;
+}
+
+export function buildConnectorAbsoluteCallbackUrl(input: {
+  host: string;
+  requestUrl: string;
+  connector?: Pick<Connector, "connectorType" | "entryPath">;
+}): string {
+  const protocol = isLocalHost(input.host) ? "http" : "https";
+  const targetPath = resolveConnectorCallbackTargetPath(input.requestUrl, input.connector);
+  return `${buildOrigin(protocol, input.host)}${targetPath}`;
 }
 
 function sanitizeCallbackUrl(

@@ -1,5 +1,13 @@
 import type { Connector } from "./connectors";
 import type { GlobalSettings } from "./settings";
+import {
+  inferProtocol,
+  isLocalHost,
+  isLocalHostname,
+  normalizeHost,
+  normalizeProto,
+} from "./auth-origin-host";
+import { findConnectorByPort } from "./auth-origin-connector";
 
 export type AuthOriginSource =
   | "forwarded-host"
@@ -20,50 +28,7 @@ export interface ResolvedAuthOrigin {
   source: AuthOriginSource;
 }
 
-function normalizeHost(host?: string | null): string {
-  return (host || "").trim().toLowerCase();
-}
-
-function normalizeProto(proto?: string | null): string {
-  const cleaned = (proto || "").trim().toLowerCase();
-  if (!cleaned) return "";
-  return cleaned.replace(/:$/, "");
-}
-
-function getHostname(host: string): string {
-  return host.split(":")[0] || "";
-}
-
-function getPort(host: string): number | undefined {
-  const portCandidate = host.split(":")[1];
-  if (!portCandidate) return undefined;
-  const parsed = parseInt(portCandidate, 10);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-export function isLocalHostname(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0";
-}
-
-export function isLocalHost(host: string): boolean {
-  return isLocalHostname(getHostname(normalizeHost(host)));
-}
-
-function inferProtocol(host: string, forwardedProto: string): string {
-  if (forwardedProto) return forwardedProto;
-  return isLocalHost(host) ? "http" : "https";
-}
-
-function findConnectorByPort(connectors: Connector[], ...hosts: string[]): Connector | undefined {
-  for (const host of hosts) {
-    const port = getPort(normalizeHost(host));
-    if (!port) continue;
-    const connector = connectors.find((candidate) => candidate.port === port);
-    if (connector) return connector;
-  }
-  if (connectors.length === 1) return connectors[0];
-  return undefined;
-}
+export { isLocalHost, isLocalHostname };
 
 export interface ResolveAuthOriginInput {
   forwardedHost?: string | null;

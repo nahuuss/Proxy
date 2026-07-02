@@ -8,6 +8,7 @@ function NtlmLoginForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams?.get("callbackUrl") || "/";
   const connectorId = searchParams?.get("connectorId") || "";
+  const defaultDomain = searchParams?.get("domain") || "";
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -57,12 +58,13 @@ function NtlmLoginForm() {
           </div>
 
           {/* Campo dominio oculto para mantener lógica de autenticación sin mostrarlo en UI */}
-          <input name="domain" type="hidden" defaultValue="SERENASEGUROS" />
+          <input name="domain" type="hidden" value={defaultDomain} readOnly />
+          <input name="connectorId" type="hidden" value={connectorId} readOnly />
 
           {error && <p style={{ margin: 0, color: "#DC2626", fontSize: "13px", textAlign: "center" }}>{error}</p>}
 
-          <button type="submit" disabled={loading}
-            style={{ background: loading ? "#93C5FD" : "#2563EB", color: "#fff", border: "none", borderRadius: "8px", padding: "12px", fontSize: "14px", fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", marginTop: "4px" }}>
+          <button type="submit" disabled={loading || !connectorId}
+            style={{ background: loading || !connectorId ? "#93C5FD" : "#2563EB", color: "#fff", border: "none", borderRadius: "8px", padding: "12px", fontSize: "14px", fontWeight: 700, cursor: loading || !connectorId ? "not-allowed" : "pointer", marginTop: "4px" }}>
             {loading ? "Verificando..." : "Ingresar"}
           </button>
         </form>

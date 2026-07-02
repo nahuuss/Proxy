@@ -13,9 +13,8 @@ export const metadata: Metadata = {
 import { StatsProvider } from "@/contexts/StatsContext";
 import { Sidebar } from "@/components/Sidebar";
 import { TopAppBar } from "@/components/TopAppBar";
-import { auth } from "@/auth";
+import { getAdminAccessState } from "@/lib/admin-access";
 import { getSettings } from "@/lib/settings";
-import { headers } from "next/headers";
 import { CheckCircle2 } from "lucide-react";
 
 export default async function RootLayout({
@@ -24,16 +23,8 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const settings = await getSettings();
-  let isBypass = settings.bypassAuth;
-  
-  const headersList = await headers();
-  const host = headersList.get("host") || "";
-  if (host.includes(":3000")) {
-    isBypass = true;
-  }
-
-  const session = isBypass ? null : await auth();
-  const showAdminUI = isBypass || !!session;
+  const access = await getAdminAccessState();
+  const showAdminUI = access.hasAccess;
 
   return (
     <html lang="en" className="dark">
@@ -46,7 +37,7 @@ export default async function RootLayout({
               
               {/* Área principal desplazada a la derecha por el Sidebar fijo (w-48 = 12rem) */}
               <main className="ml-48 flex-1 flex flex-col">
-                <TopAppBar email={session?.user?.email} />
+                <TopAppBar email={access.session?.user?.email} />
                 
                 {/* Contenido (Page) */}
                 <div className="flex-1 overflow-auto">

@@ -2,8 +2,8 @@
 
 import { createConnectorAction, checkPortAction } from "@/app/actions";
 import { useActionState, useState, useEffect } from "react";
-import { 
-  Rocket, 
+import {
+  Rocket,
   Loader2, 
   Zap, 
   ArrowLeft, 
@@ -12,10 +12,21 @@ import {
   Settings, 
   Network, 
   Info, 
-  Shield, 
-  Activity 
+  Shield,
+  Activity
 } from "lucide-react";
-import { PRODUCT_CATALOG } from "@/lib/product-catalog";
+import {
+  ConnectorProductType,
+  DEFAULT_PRODUCT_TYPE,
+  PRODUCT_CATALOG,
+} from "@/lib/product-catalog";
+import {
+  getProductFieldPresentation,
+  getProductProfile,
+  isConnectorNtlmActive,
+  requiresConnectorNtlmDomain,
+  validateConnectorWithProfile,
+} from "@/lib/product-profiles";
 
 const CONNECTOR_TYPES = PRODUCT_CATALOG;
 
@@ -33,7 +44,7 @@ export function AddConnectorForm() {
   const [description, setDescription] = useState("");
   const [targetUrl, setTargetUrl] = useState("");
   const [publicHost, setPublicHost] = useState("");
-  const [connectorType, setConnectorType] = useState<string>("generic");
+  const [connectorType, setConnectorType] = useState<ConnectorProductType>(DEFAULT_PRODUCT_TYPE);
   const [entryPath, setEntryPath] = useState("");
   const [coreNtlmDomain, setCoreNtlmDomain] = useState("");
   
@@ -48,6 +59,9 @@ export function AddConnectorForm() {
   const [hbFirstPulse, setHbFirstPulse] = useState("");
   const [trafficRetentionValue, setTrafficRetentionValue] = useState("");
   const [trafficRetentionUnit, setTrafficRetentionUnit] = useState("hours");
+  const selectedProfile = getProductProfile(connectorType);
+  const fieldPresentation = getProductFieldPresentation(connectorType);
+  const profileValidationErrors = validateConnectorWithProfile({ connectorType, entryPath, coreNtlmDomain, isNtlm, ntlmDomain });
 
   // Estados de validación de puerto
   const [portOccupied, setPortOccupied] = useState<boolean | null>(null);
@@ -88,12 +102,11 @@ export function AddConnectorForm() {
   };
 
   // Manejar el cambio de tipo de conector
-  const handleTypeChange = (val: string) => {
+  const handleTypeChange = (val: ConnectorProductType) => {
     setConnectorType(val);
-    if (val === "dynamics-crm") {
-      setIsNtlm(true);
-    } else if (val === "core") {
-      setIsNtlm(false);
+    const nextProfile = getProductProfile(val);
+    if (!nextProfile.supports.ntlmToggle) {
+      setIsNtlm(isConnectorNtlmActive({ connectorType: val, isNtlm: false }));
     }
   };
 
@@ -108,6 +121,9 @@ export function AddConnectorForm() {
     }
     if (step === 2) {
       return targetUrl.trim() !== "" && publicHost.trim() !== "";
+    }
+    if (step === 3 || step === 4) {
+      return profileValidationErrors.length === 0;
     }
     return true;
   };
@@ -304,18 +320,21 @@ export function AddConnectorForm() {
                 ))}
               </div>
             </div>
-            <div className="space-y-2">
-              <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Path de Entrada / Entry Path (Opcional)</label>
-              <input 
-                name="entryPath"
-                value={entryPath}
-                onChange={e => setEntryPath(e.target.value)}
-                className="w-full bg-surface-container-lowest border border-transparent text-on-surface font-mono text-sm py-3 px-4 rounded-lg focus:border-primary/50 focus:ring-0 placeholder-outline-variant transition-all outline-none" 
-                placeholder="e.g. /CRM/" 
-                type="text"
-              />
-            </div>
-            {connectorType === "core" && (
+            {selectedProfile.supports.entryPath && (
+              <div className="space-y-2">
+                <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{fieldPresentation.entryPathLabel}</label>
+                <input 
+                  name="entryPath"
+                  value={entryPath}
+                  onChange={e => setEntryPath(e.target.value)}
+                  className="w-full bg-surface-container-lowest border border-transparent text-on-surface font-mono text-sm py-3 px-4 rounded-lg focus:border-primary/50 focus:ring-0 placeholder-outline-variant transition-all outline-none" 
+                  placeholder={`e.g. ${fieldPresentation.entryPathPlaceholder}`}
+                  type="text"
+                />
+                <p className="text-[10px] text-on-surface-variant/70">{fieldPresentation.entryPathHelp}</p>
+              </div>
+            )}
+            {selectedProfile.supports.coreNtlmDomain && (
               <div className="space-y-2">
                 <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Dominio NTLM Core</label>
                 <input
@@ -326,7 +345,13 @@ export function AddConnectorForm() {
                   placeholder="e.g. SERENASEGUROS"
                   type="text"
                 />
-                <p className="text-[10px] text-on-surface-variant/70">Dominio usado exclusivamente por el flujo NTLM de Core en <code>/LoginExterno.aspx</code>.</p>
+                <p className="text-[10px] text-on-surface-variant/70">{fieldPresentation.coreNtlmDomainHelp}</p>
+              </div>
+            )}
+            {step === 3 && profileValidationErrors.length > 0 && (
+              <div className="rounded-lg border border-error/30 bg-error/5 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-error">Faltan datos del perfil</p>
+                <p className="text-[11px] text-error/90 mt-1">{profileValidationErrors.join(" ")}</p>
               </div>
             )}
           </div>
@@ -356,7 +381,7 @@ export function AddConnectorForm() {
               </label>
             </div>
 
-            {connectorType !== "core" && (
+            {selectedProfile.supports.ntlmToggle && (
               <>
             {/* NTLM Integration */}
             <div className="flex items-start justify-between p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/10">
@@ -371,16 +396,16 @@ export function AddConnectorForm() {
                 <input 
                   type="checkbox" 
                   checked={isNtlm} 
-                  disabled={connectorType === "dynamics-crm"}
                   onChange={e => setIsNtlm(e.target.checked)} 
                   className="sr-only peer" 
                 />
                 <div className="w-10 h-5 bg-outline-variant rounded-full peer peer-checked:bg-primary peer-focus:outline-none transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5 disabled:opacity-50"></div>
               </label>
             </div>
+              </>
+            )}
 
-            {/* Campo Dominio NTLM */}
-            {(isNtlm || connectorType === "dynamics-crm") && (
+            {selectedProfile.supports.ntlmDomain && requiresConnectorNtlmDomain({ connectorType, isNtlm }) && (
               <div className="space-y-2 p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/10 animate-in slide-in-from-top-2 duration-200">
                 <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Dominio NTLM / Active Directory Domain</label>
                 <input 
@@ -391,9 +416,16 @@ export function AddConnectorForm() {
                   placeholder="e.g. MIEMPRESA" 
                   type="text"
                 />
+                {!selectedProfile.supports.ntlmToggle && (
+                  <p className="text-[10px] text-on-surface-variant/70">Este perfil usa NTLM de forma obligatoria y requiere el dominio configurado.</p>
+                )}
               </div>
             )}
-              </>
+            {step === 4 && profileValidationErrors.length > 0 && (
+              <div className="rounded-lg border border-error/30 bg-error/5 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-error">Faltan datos del perfil</p>
+                <p className="text-[11px] text-error/90 mt-1">{profileValidationErrors.join(" ")}</p>
+              </div>
             )}
 
           </div>

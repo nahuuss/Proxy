@@ -1,105 +1,37 @@
 import type { Connector } from "./connectors";
+import {
+  ConnectorProductType,
+  DEFAULT_PRODUCT_TYPE,
+  ProductBehaviorConfig,
+  ProductCatalogEntry,
+  ProductConfig,
+  ProductExecutionMode,
+  ProductProfileContract,
+} from "./product-schema";
+import { getLegacyForcedExecutionPaths, getProductCatalogEntries, getProductProfile } from "./product-profiles";
 
-export type ConnectorProductType = "generic" | "dynamics-crm" | "core" | "bank" | "serena-test";
+export type {
+  ConnectorProductType,
+  ProductBehaviorConfig,
+  ProductCatalogEntry,
+  ProductConfig,
+  ProductExecutionMode,
+  ProductProfileContract,
+};
 
-export type ProductExecutionMode =
-  | "none"
-  | "passive-html"
-  | "xhr-keepalive"
-  | "background-job";
-
-export interface ProductBehaviorConfig {
-  backgroundJobPaths?: string[];
-  xhrKeepAlivePaths?: string[];
-  passiveHtmlPaths?: string[];
-  loginPathHints?: string[];
-  backgroundJobForMultipart?: boolean;
-  xhrKeepAliveForAjax?: boolean;
-}
-
-export type ProductConfig = Partial<Record<ConnectorProductType, ProductBehaviorConfig>>;
-
-export interface ProductCatalogEntry {
-  value: ConnectorProductType;
-  label: string;
-  icon: string;
-  desc: string;
-  tooltip: string;
-  defaults: ProductBehaviorConfig;
-}
-
-export const PRODUCT_CATALOG: readonly ProductCatalogEntry[] = [
-  {
-    value: "generic",
-    label: "Genérico",
-    icon: "🔗",
-    desc: "Proxy HTTP/HTTPS estandar. Sin customizaciones especificas.",
-    tooltip:
-      "Solo activa el Heartbeat para navegaciones GET tradicionales. Sin reescrituras especiales ni soporte para uploads largos.",
-    defaults: {},
-  },
-  {
-    value: "dynamics-crm",
-    label: "Dynamics CRM",
-    icon: "📊",
-    desc: "Microsoft Dynamics CRM on-premise. Habilita NTLM y reescrituras CRM.",
-    tooltip:
-      "Mantiene handshake NTLM por request, anti-lockout, reescritura CRM y comportamiento conservador de Heartbeat.",
-    defaults: {},
-  },
-  {
-    value: "core",
-    label: "Core",
-    icon: "🏦",
-    desc: "Sistema Core bancario. Soporta NTLM Core, uploads y XHR largos.",
-    tooltip:
-      "Permite keepalive para XHR largos, proteccion para uploads multipart y reglas especiales de autenticacion Core.",
-    defaults: {
-      backgroundJobForMultipart: true,
-      xhrKeepAliveForAjax: true,
-    },
-  },
-  {
-    value: "bank",
-    label: "BANK",
-    icon: "💳",
-    desc: "Portal bancario. Corrige AJAX y protege cargas largas de cobranza.",
-    tooltip:
-      "Mantiene Heartbeat para GET largos y usa background jobs para UploadAndProcess y UploadAndProcessMutual.",
-    defaults: {
-      backgroundJobPaths: [
-        "/cobranzaautomatica/uploadandprocess",
-        "/cobranzaautomatica/uploadandprocessmutual",
-      ],
-      backgroundJobForMultipart: true,
-    },
-  },
-  {
-    value: "serena-test",
-    label: "Serena Test",
-    icon: "🧪",
-    desc: "Entorno de staging y pruebas custom. Reglas DNN y exclusiones de login.",
-    tooltip:
-      "Excluye login y AJAX Delta, permite pruebas de uploads y mantiene limpieza DNN sin afectar produccion.",
-    defaults: {
-      backgroundJobForMultipart: true,
-      xhrKeepAliveForAjax: true,
-      loginPathHints: ["login", "ingreso"],
-    },
-  },
-] as const;
-
-export const DEFAULT_PRODUCT_TYPE: ConnectorProductType = "generic";
+export const PRODUCT_CATALOG: readonly ProductCatalogEntry[] = getProductCatalogEntries();
+export { DEFAULT_PRODUCT_TYPE };
 
 export function getProductCatalogEntry(productType?: string): ProductCatalogEntry {
-  return (
-    PRODUCT_CATALOG.find((entry) => entry.value === productType) ??
-    PRODUCT_CATALOG.find((entry) => entry.value === DEFAULT_PRODUCT_TYPE)!
-  );
+  return getProductProfile(productType).catalog;
 }
 
 export function normalizeConnectorProductType(productType?: string): ConnectorProductType {
   return getProductCatalogEntry(productType).value;
+}
+
+export function getProductProfileContract(productType?: string): ProductProfileContract {
+  return getProductCatalogEntry(productType).contract;
 }
 
 export function getEffectiveProductConfig(
@@ -112,7 +44,7 @@ export function getEffectiveProductConfig(
     new Set([
       ...(catalogDefaults.backgroundJobPaths ?? []),
       ...(currentConfig.backgroundJobPaths ?? []),
-      ...((connectorLike.hbForceUrls ?? []).map((path) => path.toLowerCase())),
+      ...getLegacyForcedExecutionPaths(connectorLike),
     ]),
   );
 
